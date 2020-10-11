@@ -8,7 +8,7 @@ def get_time():
     return time.strftime('%x_%X')
 
 
-VERSION = "0.4.1"
+VERSION = "0.4.2"
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 RED = (255, 0, 0)
@@ -93,7 +93,7 @@ class Unit:
                     unit.die(self)
                     if isinstance(self, Hero) and isinstance(unit, Enemy):
                         self.score += unit.points
-                    print(f"[{get_time()}] {self.name} scored {unit.points} point (Total score: {self.score}).")
+                        print(f"[{get_time()}] {self.name} scored {unit.points} point (Total score: {self.score}).")
 
     def die(self, reason="Cheats"):
         print(f"[{get_time()}] {self.name} died - reason: {reason}.")
@@ -114,7 +114,7 @@ class Unit:
         ways = {"up": [0, -1], "down": [0, 1], "left": [-1, 0], "right": [1, 0]}
         x, y = self.pos.x + ways[way][0], self.pos.y + ways[way][1]
         if map.isWall(x, y):
-            print(f"[{get_time()}] {self} couldn't go on the wall (x:{x}, y:{y}).")
+            return
         elif map.isFree(x, y):
             if map.isExit(x, y):
                 map.update_map()
@@ -122,7 +122,6 @@ class Unit:
                 map[self.pos.x][self.pos.y] = 1
                 self.pos.change(x, y)
                 map[self.pos.x][self.pos.y] = self
-                print(f"[{get_time()}] {self} successfully went {way}.")
                 map.render_map()
         else:
             print(f"[{get_time()}] {self} cannot go this way (x:{x}, y:{y}).")
@@ -165,6 +164,7 @@ class Enemy(Unit):
         randPoint = map.get_randomPoint()
         map.spawnObject(self, randPoint[0], randPoint[1])
         self.points = points
+        self.spawnPoint = (1, 1)
 
 
 class Map(list):
@@ -204,14 +204,14 @@ class Map(list):
 
         # Найти позицию определённого объекта на карте
     def find_pos(self, obj):
-        for y in range(self.size):
+        for x in range(self.size):
             try:
-                x = self[y].index(obj)
+                y = self[x].index(obj)
             except ValueError:
                 continue
             else:
-                return [x, y]
-        return [0, 0]
+                return x, y
+        return None, None
 
     # <<< Воспомогательные функции
 
@@ -227,6 +227,7 @@ class Map(list):
                     self[i].append(1)
                 elif pix[i, j][:3] == YELLOW:
                     self[i].append("spawn")
+                    self.spawnPoint = (i, j)
                 elif pix[i, j][:3] == BLACK:
                     self[i].append("exit")
                 # elif pix[i, j][:3] == RED:
@@ -256,7 +257,7 @@ class Map(list):
         for i in range(len(self.objects)-1):
             self.objects[-1].die()
             self.objects.pop()
-        self.objects[0].teleport(1, 1)
+        self.objects[0].teleport(self.spawnPoint[0], self.spawnPoint[1])
         [Enemy(map, f"Ork {i+1}", random.randint(2, 5)) for i in range(random.randint(5, 20))]
         Map.created_maps += 1
         print(f"[{get_time()}] Level {Map.created_maps} has been started.")
@@ -267,8 +268,10 @@ class Map(list):
     def spawnObject(self, object, x=0, y=0):
         if isinstance(object, Hero):  # Герой всегда на спавн-точке
             spawnCords = self.find_pos("spawn")
-            x, y = spawnCords[0], spawnCords[1]
-            # x, y = 48, 48
+            if spawnCords == None:
+                randPoint = self.get_randomPoint()
+                x, y = randPoint[0], randPoint[1]
+            else: x, y = spawnCords[0], spawnCords[1]
         elif self[x][y] != 1:
             return print(f"[{get_time()}] {object} couldn't spawn on the wall (x:{x}, y:{y}).")
         self.objects.append(object)
