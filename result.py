@@ -8,7 +8,7 @@ def get_time():
     return time.strftime('%x_%X')
 
 
-VERSION = "0.4"
+VERSION = "0.4.1"
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 RED = (255, 0, 0)
@@ -25,7 +25,7 @@ pygame.init()
 sc = pygame.display.set_mode((display_width, display_height))
 pygame.display.set_caption(f"CaveX v{VERSION}")
 
-font = pygame.font.Font(None, 50)
+font = pygame.font.Font("font.ttf", 35)
 
 
 class Position:
@@ -250,7 +250,7 @@ class Map(list):
                 elif isinstance(self[i][j], Enemy):
                     pygame.draw.rect(sc, PINK, (i * PIXEL_SIZE, j * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
 
-    # Обновить карту (заново отрегенить, расставить мобов итд)
+        # Обновить карту (заново отрегенить, расставить мобов итд)
     def update_map(self):
         print(f"[{get_time()}] Level {Map.created_maps} has been passed.")
         for i in range(len(self.objects)-1):
@@ -263,7 +263,7 @@ class Map(list):
         self.objects[0].score += 10
 
     # <<< Настройки карты
-    # Спавн объекта на определённых координатах
+        # Спавн объекта на определённых координатах
     def spawnObject(self, object, x=0, y=0):
         if isinstance(object, Hero):  # Герой всегда на спавн-точке
             spawnCords = self.find_pos("spawn")
@@ -282,7 +282,7 @@ hero = Hero(map)
 [Enemy(map, f"Ork {i+1}", random.randint(2, 5)) for i in range(random.randint(10, 25))]
 isGame = True
 while isGame:
-    pygame.time.delay(20)
+    pygame.time.delay(60)
     sc.fill(GREEN)
     for event in pygame.event.get():
         if event.type == pygame.QUIT: isGame = False
