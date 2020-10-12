@@ -1,9 +1,10 @@
+# Необходимие библиотеки >>>
 import pygame
 import time
 from PIL import Image
 from maze import *
 import os
-
+# Необходимые библиотеки <<<
 
 # Константы
 LOGGING = True
@@ -34,15 +35,15 @@ font = pygame.font.Font("font.ttf", 35)
 
 
 # Воспомогательные функции >>>
-def get_time(): return time.strftime('%x_%X')
+def get_time(): return time.strftime('%x_%X')  # Время в консоли
 
 
 def log(text):
-    if LOGGING: print(f"[{get_time()}] LOG: {text}")
+    if LOGGING: print(f"[{get_time()}] LOG: {text}")  # Логи в консоли
 # <<< Воспомогательные функции
 
 
-class Position:
+class Position:  # Класс отвечающий за координаты юнитов
     def __init__(self, x=0, y=0):
         self.x = x
         self.y = y
@@ -55,7 +56,7 @@ class Position:
         return self.x, self.y
 
 
-class Unit:
+class Unit:  #  Класс отвечающий за параметры юнитов
     def __init__(self, map, name, hp, ar, dmg):
         self.pos = Position()
         self.__map = map
@@ -152,7 +153,7 @@ class Unit:
     # <<< Передвижение
 
 
-class Hero(Unit):
+class Hero(Unit):  # Класс отвечающий за параметры главного героя
     def __init__(self, map):
         super().__init__(map, "Hero", hp=200.0, ar=0.0, dmg=5.0)
         map.spawnObject(self)
@@ -331,33 +332,33 @@ if __name__ == "__main__":
 
     isGame = True
     while isGame:
-        pygame.time.delay(60)
+        pygame.time.delay(60)  # Задержка обновления экрана игры
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 isGame = False
-        sc.fill(GREEN)
+        sc.fill(GREEN)  # Зарисовка фона
 
-        map.render_map()
-        heroScore = font.render(f"Score: {hero.score}", True, WHITE)
-        mapLevel = font.render(f"LVL: {map.get_current_level()}", True, WHITE)
-        heroHP = font.render(f"HP: {hero.health}/{hero.MAXHEALTH}", True, WHITE)
-        heroAR = font.render(f"AR: {hero.armor}", True, WHITE)
-        sc.blit(heroScore, (PIXEL_SIZE, PIXEL_SIZE*2))
-        sc.blit(mapLevel, (display_width - display_width//3 + PIXEL_SIZE, PIXEL_SIZE*2))
-        sc.blit(heroHP, (PIXEL_SIZE, display_height - PIXEL_SIZE * (MARGIN - 1)))
-        sc.blit(heroAR, (display_width - display_width//3 + PIXEL_SIZE, display_height - PIXEL_SIZE * (MARGIN - 1)))
+        map.render_map()  # Прорисовывает каждый объект программы
+        heroScore = font.render(f"Score: {hero.score}", True, WHITE)  # Счётчик очков игрока
+        mapLevel = font.render(f"LVL: {map.get_current_level()}", True, WHITE)  # Счётчик пройденных уровней
+        heroHP = font.render(f"HP: {hero.health}/{hero.MAXHEALTH}", True, WHITE)  # Отображение здоровье героя
+        heroAR = font.render(f"AR: {hero.armor}", True, WHITE)  # Отображение параметра брони персонажа
+        sc.blit(heroScore, (PIXEL_SIZE, PIXEL_SIZE*2))  # Выделяет место и открысовывает счётчик очков
+        sc.blit(mapLevel, (display_width - display_width//3 + PIXEL_SIZE, PIXEL_SIZE*2))  # Выделяет место и открысовывает счётчик пройденых уровней
+        sc.blit(heroHP, (PIXEL_SIZE, display_height - PIXEL_SIZE * (MARGIN - 1)))  # Выделяет место и открысовывает счётчик здоровье персонажа
+        sc.blit(heroAR, (display_width - display_width//3 + PIXEL_SIZE, display_height - PIXEL_SIZE * (MARGIN - 1)))  # Выделяет место и открысовывает параметры брони персонажа
 
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+        keys = pygame.key.get_pressed()  # Выполнение передвижение пока зажата клавиша
+        if keys[pygame.K_LEFT] or keys[pygame.K_a]:  # Клавиша передвижение влево
             hero.move("left")
-        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:  # Клавиша передвижение вправо
             hero.move("right")
-        if keys[pygame.K_UP] or keys[pygame.K_w]:
+        if keys[pygame.K_UP] or keys[pygame.K_w]:  # Клавиша передвижение вверх
             hero.move("up")
-        if keys[pygame.K_DOWN] or keys[pygame.K_s]:
+        if keys[pygame.K_DOWN] or keys[pygame.K_s]:  # Клавиша передвижение вниз
             hero.move("down")
-        if keys[pygame.K_SPACE]:
+        if keys[pygame.K_SPACE]:  # Клавиша атаки
             hero.attack()
-        map.objects[random.randint(1, len(map.objects)-1)].move(["left", "right", "up", "down"][random.randint(0, 3)])
+        map.objects[random.randint(1, len(map.objects)-1)].move(["left", "right", "up", "down"][random.randint(0, 3)])  # Передвижение мобов
 
-        pygame.display.update()
+        pygame.display.update()  # Обновление дисплея окна игры
