@@ -8,7 +8,7 @@ import os
 # Константы
 LOGGING = True
 ENEMIES_RANGE = (25, 100)
-VERSION = "0.4.4"
+VERSION = "0.5"
 
 
 # Цвета
@@ -338,8 +338,14 @@ if __name__ == "__main__":
         sc.fill(GREEN)
 
         map.render_map()
-        score = font.render(f"Score: {hero.score} LVL: {map.get_current_level()}", True, WHITE)
-        sc.blit(score, (10, display_height - 45))
+        heroScore = font.render(f"Score: {hero.score}", True, WHITE)
+        mapLevel = font.render(f"LVL: {map.get_current_level()}", True, WHITE)
+        heroHP = font.render(f"HP: {hero.health}/{hero.MAXHEALTH}", True, WHITE)
+        heroAR = font.render(f"AR: {hero.armor}", True, WHITE)
+        sc.blit(heroScore, (PIXEL_SIZE, PIXEL_SIZE*2))
+        sc.blit(mapLevel, (display_width - display_width//3 + PIXEL_SIZE, PIXEL_SIZE*2))
+        sc.blit(heroHP, (PIXEL_SIZE, display_height - PIXEL_SIZE * (MARGIN - 1)))
+        sc.blit(heroAR, (display_width - display_width//3 + PIXEL_SIZE, display_height - PIXEL_SIZE * (MARGIN - 1)))
 
         keys = pygame.key.get_pressed()
         if keys[pygame.K_LEFT] or keys[pygame.K_a]:
