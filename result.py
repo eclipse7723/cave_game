@@ -2,7 +2,8 @@ import pygame
 import time
 import random
 from PIL import Image
-
+from maze import *
+import os
 
 def get_time():
     return time.strftime('%x_%X')
@@ -175,7 +176,7 @@ class Map(list):
         super().__init__()
         self.size = Map.size_list[size]
         self.objects = []
-        self.create_map()
+        self.create_map('map.png')
 
     # Воспомогательные функции >>>
     @staticmethod
@@ -217,8 +218,8 @@ class Map(list):
 
     # Настройки карты >>>
         # Генерация карты по картинке
-    def create_map(self):
-        im = Image.open('map.png')
+    def create_map(self,path):
+        im = Image.open(path)
         pix = im.load()
         for i in range(self.size):
             self.append([])
@@ -234,6 +235,23 @@ class Map(list):
                 # 	self[i].append("enemy")
                 else:
                     self[i].append(0)
+
+    def gen_map(self):
+        m = Maze()
+        m.create(self.size, self.size, Maze.Create.KRUSKAL)
+        m.save_maze()
+        im = Image.open('maze.png')
+        pix = im.load()
+        for i in range(self.size):
+            self.append([])
+            for j in range(self.size):
+                if pix[i, j][:3] == BLACK:
+                    im.putpixel((i, j), GREEN)
+                else:
+                    pass
+        im.putpixel((1, 1), YELLOW)
+        im.putpixel((49, 49), BLACK)
+        im.save("maze.png")
 
     def render_map(self):
         for j in range(self.size):
@@ -258,6 +276,12 @@ class Map(list):
             self.objects[-1].die()
             self.objects.pop()
         self.objects[0].teleport(self.spawnPoint[0], self.spawnPoint[1])
+        os.remove("maze.png")
+        self.gen_map()
+        for i in range(len(self)):
+            self.pop()
+        self.create_map("maze.png")
+        self.render_map()
         [Enemy(map, f"Ork {i+1}", random.randint(2, 5)) for i in range(random.randint(5, 20))]
         Map.created_maps += 1
         print(f"[{get_time()}] Level {Map.created_maps} has been started.")
