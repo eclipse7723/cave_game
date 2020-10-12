@@ -1,15 +1,13 @@
 import pygame
 import time
-import random
 from PIL import Image
 from maze import *
 import os
 
-def get_time():
-    return time.strftime('%x_%X')
+def get_time(): return time.strftime('%x_%X')
 
 
-VERSION = "0.4.2"
+VERSION = "0.4.3"
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 RED = (255, 0, 0)
