@@ -1,16 +1,15 @@
 # Необходимие библиотеки >>>
 import pygame
 import time
+import os
 from PIL import Image
 from maze import *
-import os
 # Необходимые библиотеки <<<
 
 # Константы
-LOGGING = True
-ENEMIES_RANGE = (25, 100)
+LOGGING = True              # Логи разработчика
+ENEMIES_RANGE = (25, 100)   # Количество мобов на карте (от, до)
 VERSION = "0.5"
-
 
 # Цвета
 BLACK = (0, 0, 0)
@@ -38,12 +37,12 @@ font = pygame.font.Font("font.ttf", 35)
 def get_time(): return time.strftime('%x_%X')  # Время в консоли
 
 
-def log(text):
-    if LOGGING: print(f"[{get_time()}] LOG: {text}")  # Логи в консоли
+def log(text):  # Логи разработчика
+    if LOGGING: print(f"[{get_time()}] LOG: {text}")
 # <<< Воспомогательные функции
 
 
-class Position:  # Класс отвечающий за координаты юнитов
+class Position:  # Координаты объектов
     def __init__(self, x=0, y=0):
         self.x = x
         self.y = y
@@ -56,7 +55,7 @@ class Position:  # Класс отвечающий за координаты ю�
         return self.x, self.y
 
 
-class Unit:  #  Класс отвечающий за параметры юнитов
+class Unit:  # Общий класс для юнитов
     def __init__(self, map, name, hp, ar, dmg):
         self.pos = Position()
         self.__map = map
@@ -108,7 +107,7 @@ class Unit:  #  Класс отвечающий за параметры юнит
                         self.score += unit.points
                         print(f"[{get_time()}] {self.name} scored {unit.points} point (Total score: {self.score}).")
 
-    def die(self, reason="Cheats"):
+    def die(self, reason):
         print(f"[{get_time()}] {self.name} died - reason: {reason}.")
         cords = self.pos.get_position()
         map[cords[0]][cords[1]] = 1
@@ -172,19 +171,19 @@ class Hero(Unit):  # Класс отвечающий за параметры г�
 
 
 class Enemy(Unit):
-    # orc_names = ["Krekka", "Golkra", "Zorrana", "Nokka", "Kuhga", "Unge", "Blackhand", "Thrall", "Orgrim", "Nerzhul", "Grommash", "Durotan"]
-    def __init__(self, map, name, points):
+    def __init__(self, map, name, points, agr):
         super().__init__(map, name, hp=100.0, ar=3.0, dmg=10.0)
         randPoint = map.get_randomPoint()
         map.spawnObject(self, randPoint[0], randPoint[1])
         self.points = points
+        self.agr_radius = agr
 
     @staticmethod
     def get_OrkName():
-        startings = ["Slog", "Ra", "Ro", "Og", "Kegi", "Zor", "Un", "Yag", "Black", "Mug", "Gud"]
+        start = ["Slog", "Ra", "Ro", "Og", "Kegi", "Zor", "Un", "Yag", "Black", "Mug", "Gud"]
         middle = "abcdeghklmnopqrst"
-        endings = ["ka", "rana", "all", "mash", "tan", "gu", "tag", "ge", "rim"]
-        return startings[random.randint(0, len(startings))-1] + middle[random.randint(0, len(middle)-1)]*random.randint(0,1) + endings[random.randint(0, len(endings)-1)]
+        end = ["ka", "rana", "all", "mash", "tan", "gu", "tag", "ge", "rim"]
+        return start[random.randint(0, len(start))-1] + middle[random.randint(0, len(middle)-1)]*random.randint(0,1) + end[random.randint(0, len(end)-1)]
 
 
 class Map(list):
@@ -223,8 +222,7 @@ class Map(list):
             if self.isFree(x, y): break
         return x, y
 
-        # Найти позицию определённого объекта на карте
-    def find_pos(self, obj):
+    def find_pos(self, obj):    # Найти позицию определённого объекта на карте
         for x in range(self.size):
             try:
                 y = self[x].index(obj)
@@ -233,12 +231,10 @@ class Map(list):
             else:
                 return x, y
         return None, None
-
     # <<< Воспомогательные функции
 
     # Настройки карты >>>
-        # Генерация карты по картинке
-    def create_map(self, path):
+    def create_map(self, path):  # Создание карты по картинке
         im = Image.open(path)
         pix = im.load()
         for i in range(self.size):
@@ -252,13 +248,12 @@ class Map(list):
                 elif pix[i, j][:3] == BLACK:
                     self[i].append("exit")
                 # elif pix[i, j][:3] == RED:
-                # 	self[i].append("enemy")
+                # 	self[i].append(Enemy(map, f"Ork {Enemy.get_OrkName()}", random.randint(2, 5)))
                 else:
                     self[i].append(0)
         if self.spawn is None: self.spawn = (1, 1)
 
-        # Генерация нового лабиринта
-    def gen_map(self):
+    def gen_map(self):  # Генерация нового лабиринта
         m = Maze()
         m.create(self.size, self.size, Maze.Create.KRUSKAL)
         m.save_maze()
@@ -273,8 +268,7 @@ class Map(list):
         im.putpixel((49, 49), BLACK)
         im.save("maze.png")
 
-        # Отрисовка карты
-    def render_map(self):
+    def render_map(self):   # Отрисовка карты
         for j in range(self.size):
             for i in range(self.size):
                 if self[i][j] == 0:
@@ -290,11 +284,10 @@ class Map(list):
                 elif isinstance(self[i][j], Enemy):
                     pygame.draw.rect(sc, PINK, (i * PIXEL_SIZE, (j + MARGIN) * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
 
-        # Обновить карту (заново отрегенить, расставить мобов итд)
-    def update_map(self):
+    def update_map(self):    # Обновить карту (заново отрегенить, расставить мобов итд)
         print(f"[{get_time()}] Level {Map.created_maps} has been passed.")
         for i in range(len(self.objects)-1):
-            self.objects[-1].die()
+            self.objects[-1].die("level passed")
             # self.objects.pop()
         os.remove("maze.png")
         self.gen_map()
@@ -303,14 +296,13 @@ class Map(list):
         self.create_map("maze.png")
         self.objects[0].teleport(self.spawn[0], self.spawn[1])
         self.render_map()
-        [Enemy(map, f"Ork {Enemy.get_OrkName()}", random.randint(2, 5)) for i in range(random.randint(ENEMIES_RANGE[0], ENEMIES_RANGE[1]))]
+        [Enemy(map, f"Ork {Enemy.get_OrkName()}", random.randint(2, 5), 2) for i in range(random.randint(ENEMIES_RANGE[0], ENEMIES_RANGE[1]))]
         Map.created_maps += 1
         log(f"Level {Map.created_maps} has been started.")
         self.objects[0].score += 10
 
     # <<< Настройки карты
-        # Спавн объекта на определённых координатах
-    def spawnObject(self, object, x=0, y=0):
+    def spawnObject(self, object, x=0, y=0):    # Спавн объекта на определённых координатах
         if isinstance(object, Hero):  # Герой всегда на спавн-точке
             spawnCords = self.find_pos("spawn")
             if spawnCords is None:
@@ -328,7 +320,7 @@ class Map(list):
 if __name__ == "__main__":
     map = Map("S")
     hero = Hero(map)
-    [Enemy(map, f"Ork {Enemy.get_OrkName()}", random.randint(2, 5)) for i in range(random.randint(ENEMIES_RANGE[0], ENEMIES_RANGE[1]))]
+    [Enemy(map, f"Ork {Enemy.get_OrkName()}", random.randint(2, 5), 2) for i in range(random.randint(ENEMIES_RANGE[0], ENEMIES_RANGE[1]))]
 
     isGame = True
     while isGame:
@@ -339,26 +331,33 @@ if __name__ == "__main__":
         sc.fill(GREEN)  # Зарисовка фона
 
         map.render_map()  # Прорисовывает каждый объект программы
-        heroScore = font.render(f"Score: {hero.score}", True, WHITE)  # Счётчик очков игрока
-        mapLevel = font.render(f"LVL: {map.get_current_level()}", True, WHITE)  # Счётчик пройденных уровней
-        heroHP = font.render(f"HP: {hero.health}/{hero.MAXHEALTH}", True, WHITE)  # Отображение здоровье героя
-        heroAR = font.render(f"AR: {hero.armor}", True, WHITE)  # Отображение параметра брони персонажа
-        sc.blit(heroScore, (PIXEL_SIZE, PIXEL_SIZE*2))  # Выделяет место и открысовывает счётчик очков
-        sc.blit(mapLevel, (display_width - display_width//3 + PIXEL_SIZE, PIXEL_SIZE*2))  # Выделяет место и открысовывает счётчик пройденых уровней
-        sc.blit(heroHP, (PIXEL_SIZE, display_height - PIXEL_SIZE * (MARGIN - 1)))  # Выделяет место и открысовывает счётчик здоровье персонажа
-        sc.blit(heroAR, (display_width - display_width//3 + PIXEL_SIZE, display_height - PIXEL_SIZE * (MARGIN - 1)))  # Выделяет место и открысовывает параметры брони персонажа
+        # Интерфейс >>>
+        heroScore = font.render(f"Score: {hero.score}", True, WHITE)                        # Очки героя
+        mapLevel = font.render(f"LVL: {map.get_current_level()}", True, WHITE)              # Пройденных уровней
+        heroHP = font.render(f"HP: {int(hero.health)}/{int(hero.MAXHEALTH)}", True, WHITE)  # Здоровье героя
+        heroAR = font.render(f"AR: {hero.armor}", True, WHITE)                              # Защита героя
+            # Отрисовка текста
+        sc.blit(heroScore, (PIXEL_SIZE, PIXEL_SIZE*2))
+        sc.blit(mapLevel, (display_width - display_width//3 + PIXEL_SIZE, PIXEL_SIZE*2))
+        sc.blit(heroHP, (PIXEL_SIZE, display_height - PIXEL_SIZE * (MARGIN - 1)))
+        sc.blit(heroAR, (display_width - display_width//3 + PIXEL_SIZE, display_height - PIXEL_SIZE * (MARGIN - 1)))
+        # <<< Интерфейс
 
-        keys = pygame.key.get_pressed()  # Выполнение передвижение пока зажата клавиша
-        if keys[pygame.K_LEFT] or keys[pygame.K_a]:  # Клавиша передвижение влево
+        # Управление >>>
+        key = pygame.key.get_pressed()  # Выполнение передвижение пока зажата клавиша
+        # if key in MOVEMENT:
+        if key[pygame.K_LEFT] or key[pygame.K_a]:  # Клавиша передвижение влево
             hero.move("left")
-        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:  # Клавиша передвижение вправо
+        if key[pygame.K_RIGHT] or key[pygame.K_d]:  # Клавиша передвижение вправо
             hero.move("right")
-        if keys[pygame.K_UP] or keys[pygame.K_w]:  # Клавиша передвижение вверх
+        if key[pygame.K_UP] or key[pygame.K_w]:  # Клавиша передвижение вверх
             hero.move("up")
-        if keys[pygame.K_DOWN] or keys[pygame.K_s]:  # Клавиша передвижение вниз
+        if key[pygame.K_DOWN] or key[pygame.K_s]:  # Клавиша передвижение вниз
             hero.move("down")
-        if keys[pygame.K_SPACE]:  # Клавиша атаки
+        if key[pygame.K_SPACE]:
             hero.attack()
-        map.objects[random.randint(1, len(map.objects)-1)].move(["left", "right", "up", "down"][random.randint(0, 3)])  # Передвижение мобов
+        if len(map.objects) > 1:    # Передвижение мобов
+            map.objects[random.randint(1, len(map.objects)-1)].move(["left", "right", "up", "down"][random.randint(0, 3)])
+        # <<< Управление
 
         pygame.display.update()  # Обновление дисплея окна игры
