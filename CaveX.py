@@ -9,7 +9,7 @@ from maze import *
 # Константы
 LOGGING = True              # Логи разработчика
 ENEMIES_RANGE = (25, 100)   # Количество мобов на карте (от, до)
-VERSION = "0.5"
+VERSION = "0.5.1"
 
 # Цвета
 BLACK = (0, 0, 0)
@@ -93,10 +93,10 @@ class Unit:  # Общий класс для юнитов
 
     # Действия >>>
     def attack(self):
-        positions = [[0, 1], [1, 0], [1, 1], [0, -1], [-1, 0], [-1, -1], [-1, 1], [1, -1]]
+        positions = [(0, 1), (1, 0), (1, 1), (0, -1), (-1, 0), (-1, -1), (-1, 1), (1, -1)]
         for pos in positions:
             unit = map[self.pos.x + pos[0]][self.pos.y + pos[1]]
-            if isinstance(unit, Unit):
+            if isinstance(unit, Unit) or (isinstance(self, Enemy) and isinstance(unit, Hero)):
                 damage = (self._damage + random.randint(0, 3) - unit._armor) * (0 if random.randint(0, 100) <= 10 else 1)
                 unit.health -= damage
                 if damage: print(f"[{get_time()}] {self.name} inflict {damage} damage to {unit.name} (HP: {unit.health}).")
@@ -124,7 +124,7 @@ class Unit:  # Общий класс для юнитов
 
     # Передвижение >>>
     def move(self, way):
-        ways = {"up": [0, -1], "down": [0, 1], "left": [-1, 0], "right": [1, 0]}
+        ways = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
         x, y = self.pos.x + ways[way][0], self.pos.y + ways[way][1]
         if map.isWall(x, y):
             return
@@ -231,6 +231,7 @@ class Map(list):
             else:
                 return x, y
         return None, None
+
     # <<< Воспомогательные функции
 
     # Настройки карты >>>
@@ -296,7 +297,7 @@ class Map(list):
         self.create_map("maze.png")
         self.objects[0].teleport(self.spawn[0], self.spawn[1])
         self.render_map()
-        [Enemy(map, f"Ork {Enemy.get_OrkName()}", random.randint(2, 5), 2) for i in range(random.randint(ENEMIES_RANGE[0], ENEMIES_RANGE[1]))]
+        [Enemy(map, f"Ork {Enemy.get_OrkName()}", random.randint(2, 5), 5.0) for i in range(random.randint(ENEMIES_RANGE[0], ENEMIES_RANGE[1]))]
         Map.created_maps += 1
         log(f"Level {Map.created_maps} has been started.")
         self.objects[0].score += 10
@@ -320,7 +321,8 @@ class Map(list):
 if __name__ == "__main__":
     map = Map("S")
     hero = Hero(map)
-    [Enemy(map, f"Ork {Enemy.get_OrkName()}", random.randint(2, 5), 2) for i in range(random.randint(ENEMIES_RANGE[0], ENEMIES_RANGE[1]))]
+    [Enemy(map, f"Ork {Enemy.get_OrkName()}", random.randint(2, 5), 5.0) for i in range(random.randint(ENEMIES_RANGE[0], ENEMIES_RANGE[1]))]
+    time_in_sec = int(time.strftime("%S"))
 
     isGame = True
     while isGame:
@@ -345,7 +347,6 @@ if __name__ == "__main__":
 
         # Управление >>>
         key = pygame.key.get_pressed()  # Выполнение передвижение пока зажата клавиша
-        # if key in MOVEMENT:
         if key[pygame.K_LEFT] or key[pygame.K_a]:  # Клавиша передвижение влево
             hero.move("left")
         if key[pygame.K_RIGHT] or key[pygame.K_d]:  # Клавиша передвижение вправо
@@ -359,5 +360,21 @@ if __name__ == "__main__":
         if len(map.objects) > 1:    # Передвижение мобов
             map.objects[random.randint(1, len(map.objects)-1)].move(["left", "right", "up", "down"][random.randint(0, 3)])
         # <<< Управление
+
+        # Идея такая, но надо передалать во что-то адекватное
+        # Энеми идут к герою, если тот попадает в их поле зрения (увы, сквозь стену тоже)
+        if time_in_sec != int(time.strftime("%S")):
+            time_in_sec = int(time.strftime("%S"))
+            for unit in map.objects:
+                if not isinstance(unit, Enemy): continue
+                cur_dist = unit.get_distance(hero)
+                if unit.agr_radius < cur_dist: continue
+                ways = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
+                # hero = map.objects[0] // это для переноса этого ужаса в нормальный класс
+                for way in ways.items():
+                    possibly_pos = (unit.pos.x + way[1][0], unit.pos.y + way[1][1])
+                    if not map.isFree(possibly_pos[0], possibly_pos[1]): continue
+                    possibly_dist = ((hero.pos.x - possibly_pos[0])**2 + (hero.pos.y - possibly_pos[1])**2) ** (1/2)
+                    if possibly_dist < cur_dist: unit.move(way[0])
 
         pygame.display.update()  # Обновление дисплея окна игры
