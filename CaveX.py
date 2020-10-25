@@ -10,11 +10,13 @@ from maze import *
 # Константы
 LOGGING = True              # Логи разработчика
 ENEMIES_RANGE = (25, 100)   # Количество мобов на карте (от, до)
-VERSION = "0.5.2.1"
-# абстрагировать unit
-# реализовать абстрактные методы у наследников
-# обновить render_map для color
-# - зафиксировать размеры окна
+VERSION = "0.5.2.2"
+# улучшена производительность (оптимизация рисовки): 6-8% to <2%
+# заданы конкретные размеры графических блоков, пока что рисуется только сама игра
+# TODO: отрисовка GAME_BAR и PLAYER_BAR:
+#   обновлять только определённые счётчики, если значение обновилось
+#   проверять это через ивенты isScoredPoints, isPassedLevel и так далее
+
 
 # Цвета
 BLACK = (0, 0, 0)
@@ -26,16 +28,26 @@ BLUE = (29, 32, 76)
 PINK = (230, 50, 230)
 
 # Размеры
+# MARGIN = 6
+# display_width = 510
+# display_height = 560 + (10 * (MARGIN+1))
+MAP_SIZE = 51
 PIXEL_SIZE = 10
-MARGIN = 6
-display_width = 510
-display_height = 560 + (10 * (MARGIN+1))
+STATUS_BAR = (MAP_SIZE * PIXEL_SIZE, 10 * PIXEL_SIZE)
+DISPLAY_SIZE = (MAP_SIZE * PIXEL_SIZE, MAP_SIZE * PIXEL_SIZE + (2 * (STATUS_BAR[1])))
+GAME_BAR = {"SIZE": STATUS_BAR, "POSITION": (0, 0)}
+GAME = {"SIZE": (MAP_SIZE * PIXEL_SIZE, MAP_SIZE * PIXEL_SIZE), "POSITION": (0, GAME_BAR["SIZE"][1])}
+PLAYER_BAR = {"SIZE": STATUS_BAR, "POSITION": (0, GAME["SIZE"][1] + GAME_BAR["SIZE"][1])}
 
 # Инициализация игры
 pygame.init()
-sc = pygame.display.set_mode((display_width, display_height))
+sc = pygame.display.set_mode(DISPLAY_SIZE)
 pygame.display.set_caption(f"CaveX v{VERSION}")
 font = pygame.font.Font("font.ttf", 35)
+
+game_bar = pygame.Surface(GAME_BAR["SIZE"])
+game = pygame.Surface(GAME["SIZE"])
+player_bar = pygame.Surface(PLAYER_BAR["SIZE"])
 
 
 # Воспомогательные функции >>>
@@ -118,8 +130,8 @@ class Unit(ABC):  # Общий класс для юнитов
 
     def die(self, reason):
         print(f"[{get_time()}] {self.name} died - reason: {reason}.")
-        cords = self.pos.get_position()
-        map[cords[0]][cords[1]] = 1
+        pygame.draw.rect(game, WHITE, (self.pos.x * PIXEL_SIZE, self.pos.y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
+        map[self.pos.x][self.pos.y] = 1
         map.objects.remove(self)
         del self
 
@@ -171,18 +183,17 @@ class Hero(Unit):  # Класс отвечающий за параметры г�
         if map.isExit(x, y):
             map.update_map()
         elif map.isFree(x, y):
+            pygame.draw.rect(game, WHITE, (self.pos.x * PIXEL_SIZE, self.pos.y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
             map[self.pos.x][self.pos.y] = 1
             self.pos.change(x, y)
             map[self.pos.x][self.pos.y] = self
-            map.render_map()
-        else:
-            log(f"{self.name} ({self}) cannot go this way (x:{x}, y:{y}).")
+            map.render_object(self)
+        # else: log(f"{self.name} ({self}) cannot go this way (x:{x}, y:{y}).")
 
     def teleport(self, x, y):
         map[self.pos.x][self.pos.y] = 1
         self.pos.change(x, y)
         map[self.pos.x][self.pos.y] = self
-        map.render_map()
     # <<< Передвижение
 
     # Атака >>>
@@ -221,12 +232,12 @@ class Enemy(Unit):
         ways = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
         x, y = self.pos.x + ways[way][0], self.pos.y + ways[way][1]
         if map.isFree(x, y):
+            pygame.draw.rect(game, WHITE, (self.pos.x * PIXEL_SIZE, self.pos.y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
             map[self.pos.x][self.pos.y] = 1
             self.pos.change(x, y)
             map[self.pos.x][self.pos.y] = self
-            map.render_map()
-        else:
-            log(f"{self.name} ({self}) cannot go this way (x:{x}, y:{y}).")
+            map.render_object(self)
+        # else: log(f"{self.name} ({self}) cannot go this way (x:{x}, y:{y}).")
 
     def attack(self, player):
         damage = (self._damage + random.randint(0, 3) - player.armor) * (0 if random.randint(0, 100) <= 10 else 1)
@@ -331,15 +342,25 @@ class Map(list):
         for j in range(self.size):
             for i in range(self.size):
                 if self[i][j] == 1:
-                    pygame.draw.rect(sc, WHITE, (i * PIXEL_SIZE, (j + MARGIN) * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
-                elif isinstance(self[i][j], Unit):
-                    pygame.draw.rect(sc, self[i][j].color, (i * PIXEL_SIZE, (j + MARGIN) * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
+                    pygame.draw.rect(game, WHITE, (i * PIXEL_SIZE, j * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
+                # elif isinstance(self[i][j], Unit):
+                #     pygame.draw.rect(game, self[i][j].color, (i * PIXEL_SIZE, j * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
                 elif self[i][j] == "exit":
-                    pygame.draw.rect(sc, BLACK, (i * PIXEL_SIZE, (j + MARGIN) * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
+                    pygame.draw.rect(game, BLACK, (i * PIXEL_SIZE, j * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
                 elif self[i][j] == "spawn":
-                    pygame.draw.rect(sc, YELLOW, (i * PIXEL_SIZE, (j + MARGIN) * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
+                    pygame.draw.rect(game, YELLOW, (i * PIXEL_SIZE, j * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
                 else:
-                    pygame.draw.rect(sc, GREEN, (i * PIXEL_SIZE, (j + MARGIN) * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
+                    pygame.draw.rect(game, GREEN, (i * PIXEL_SIZE, j * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
+
+    def render_objects(self):
+        for obj in self.objects:
+            self.render_object(obj)
+
+    def render_object(self, obj):
+        if obj not in self.objects:
+            log(f"{obj} has not been spawned (not in map.objects)")
+            return
+        pygame.draw.rect(game, obj.color, (obj.pos.x * PIXEL_SIZE, obj.pos.y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
 
     def update_map(self):    # Обновить карту (заново отрегенить, расставить мобов итд)
         print(f"[{get_time()}] Level {Map.created_maps} has been passed.")
@@ -354,6 +375,7 @@ class Map(list):
         self.objects[0].teleport(self.spawn[0], self.spawn[1])
         self.render_map()
         [Enemy(map, f"Ork {Enemy.get_OrkName()}", random.randint(2, 5), 5.0) for i in range(random.randint(ENEMIES_RANGE[0], ENEMIES_RANGE[1]))]
+        self.render_objects()
         Map.created_maps += 1
         log(f"Level {Map.created_maps} has been started.")
         self.objects[0].score += 10
@@ -380,25 +402,28 @@ if __name__ == "__main__":
     [Enemy(map, f"Ork {Enemy.get_OrkName()}", random.randint(2, 5), 5.0) for i in range(random.randint(ENEMIES_RANGE[0], ENEMIES_RANGE[1]))]
     time_in_sec = int(time.strftime("%S"))
 
+    sc.fill(GREEN)  # Зарисовка фона
+    map.render_map()  # Прорисовывает каждый объект программы
+    map.render_objects()
+    sc.blit(game, GAME["POSITION"])
+
     isGame = True
     while isGame:
         pygame.time.delay(60)  # Задержка обновления экрана игры
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 isGame = False
-        sc.fill(GREEN)  # Зарисовка фона
 
-        map.render_map()  # Прорисовывает каждый объект программы
         # Интерфейс >>>
-        heroScore = font.render(f"Score: {hero.score}", True, WHITE)                        # Очки героя
-        mapLevel = font.render(f"LVL: {map.get_current_level()}", True, WHITE)              # Пройденных уровней
-        heroHP = font.render(f"HP: {int(hero.health)}/{int(hero.MAXHEALTH)}", True, WHITE)  # Здоровье героя
-        heroAR = font.render(f"AR: {hero.armor}", True, WHITE)                              # Защита героя
-            # Отрисовка текста
-        sc.blit(heroScore, (PIXEL_SIZE, PIXEL_SIZE*2))
-        sc.blit(mapLevel, (display_width - display_width//3 + PIXEL_SIZE, PIXEL_SIZE*2))
-        sc.blit(heroHP, (PIXEL_SIZE, display_height - PIXEL_SIZE * (MARGIN - 1)))
-        sc.blit(heroAR, (display_width - display_width//3 + PIXEL_SIZE, display_height - PIXEL_SIZE * (MARGIN - 1)))
+        # heroScore = font.render(f"Score: {hero.score}", True, WHITE)                        # Очки героя
+        # mapLevel = font.render(f"LVL: {map.get_current_level()}", True, WHITE)              # Пройденных уровней
+        # heroHP = font.render(f"HP: {int(hero.health)}/{int(hero.MAXHEALTH)}", True, WHITE)  # Здоровье героя
+        # heroAR = font.render(f"AR: {hero.armor}", True, WHITE)                              # Защита героя
+        #     # Отрисовка текста
+        # sc.blit(heroScore, (PIXEL_SIZE, PIXEL_SIZE*2))
+        # sc.blit(mapLevel, (GAME["SIZE"][0] - GAME["SIZE"][0]//3 + PIXEL_SIZE, PIXEL_SIZE*2))
+        # sc.blit(heroHP, (PLAYER_BAR["SIZE"][0], GAME["SIZE"][1] - PIXEL_SIZE * (MARGIN - 1)))
+        # sc.blit(heroAR, (PLAYER_BAR["SIZE"][0] - PLAYER_BAR["SIZE"][0]//3 + PIXEL_SIZE, GAME["SIZE"][1] - PIXEL_SIZE * (MARGIN - 1)))
         # <<< Интерфейс
 
         # Управление >>>
@@ -433,4 +458,6 @@ if __name__ == "__main__":
                     possibly_dist = ((hero.pos.x - possibly_pos[0])**2 + (hero.pos.y - possibly_pos[1])**2) ** (1/2)
                     if possibly_dist < cur_dist: unit.move(way[0])
 
-        pygame.display.update()  # Обновление дисплея окна игры
+        # map.render_objects()
+        sc.blit(game, GAME["POSITION"])
+        pygame.display.flip()  # Обновление дисплея окна игры
