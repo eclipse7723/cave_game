@@ -1,4 +1,5 @@
 # Необходимие библиотеки >>>
+from abc import ABC, abstractmethod
 import pygame
 import time
 import os
@@ -9,7 +10,11 @@ from maze import *
 # Константы
 LOGGING = True              # Логи разработчика
 ENEMIES_RANGE = (25, 100)   # Количество мобов на карте (от, до)
-VERSION = "0.5.1"
+VERSION = "0.5.2.1"
+# абстрагировать unit
+# реализовать абстрактные методы у наследников
+# обновить render_map для color
+# - зафиксировать размеры окна
 
 # Цвета
 BLACK = (0, 0, 0)
@@ -42,7 +47,7 @@ def log(text):  # Логи разработчика
 # <<< Воспомогательные функции
 
 
-class Position:  # Координаты объектов
+class Position(ABC):  # Координаты объектов
     def __init__(self, x=0, y=0):
         self.x = x
         self.y = y
@@ -55,8 +60,8 @@ class Position:  # Координаты объектов
         return self.x, self.y
 
 
-class Unit:  # Общий класс для юнитов
-    def __init__(self, map, name, hp, ar, dmg):
+class Unit(ABC):  # Общий класс для юнитов
+    def __init__(self, map, name, hp, ar, dmg, color):
         self.pos = Position()
         self.__map = map
         self._name = name
@@ -64,6 +69,7 @@ class Unit:  # Общий класс для юнитов
         self._armor = ar
         self._damage = dmg
         self._MAXHEALTH = 200.0
+        self.color = color
 
     # Характеристики >>>
     @property
@@ -92,20 +98,23 @@ class Unit:  # Общий класс для юнитов
     # <<< Характеристики
 
     # Действия >>>
-    def attack(self):
-        positions = [(0, 1), (1, 0), (1, 1), (0, -1), (-1, 0), (-1, -1), (-1, 1), (1, -1)]
-        for pos in positions:
-            unit = map[self.pos.x + pos[0]][self.pos.y + pos[1]]
-            if isinstance(unit, Unit) or (isinstance(self, Enemy) and isinstance(unit, Hero)):
-                damage = (self._damage + random.randint(0, 3) - unit._armor) * (0 if random.randint(0, 100) <= 10 else 1)
-                unit.health -= damage
-                if damage: print(f"[{get_time()}] {self.name} inflict {damage} damage to {unit.name} (HP: {unit.health}).")
-                else: print(f"[{get_time()}] {self.name} missed (HP: {unit.health}).")
-                if unit.health <= 0:
-                    unit.die(self.name)
-                    if isinstance(self, Hero) and isinstance(unit, Enemy):
-                        self.score += unit.points
-                        print(f"[{get_time()}] {self.name} scored {unit.points} point (Total score: {self.score}).")
+    @abstractmethod
+    def attack(self, unit):
+        raise NotImplementedError("Необходимо переопределить метод attack")
+    # def attack(self):
+    #     positions = [(0, 1), (1, 0), (1, 1), (0, -1), (-1, 0), (-1, -1), (-1, 1), (1, -1)]
+    #     for pos in positions:
+    #         unit = map[self.pos.x + pos[0]][self.pos.y + pos[1]]
+    #         if isinstance(unit, Unit) or (isinstance(self, Enemy) and isinstance(unit, Hero)):
+    #             damage = (self._damage + random.randint(0, 3) - unit._armor) * (0 if random.randint(0, 100) <= 10 else 1)
+    #             unit.health -= damage
+    #             if damage: print(f"[{get_time()}] {self.name} inflict {damage} damage to {unit.name} (HP: {unit.health}).")
+    #             else: print(f"[{get_time()}] {self.name} missed (HP: {unit.health}).")
+    #             if unit.health <= 0:
+    #                 unit.die(self.name)
+    #                 if isinstance(self, Hero) and isinstance(unit, Enemy):
+    #                     self.score += unit.points
+    #                     print(f"[{get_time()}] {self.name} scored {unit.points} point (Total score: {self.score}).")
 
     def die(self, reason):
         print(f"[{get_time()}] {self.name} died - reason: {reason}.")
@@ -123,12 +132,43 @@ class Unit:  # Общий класс для юнитов
     # <<< Действия
 
     # Передвижение >>>
+    @abstractmethod
+    def move(self, direction):
+        raise NotImplementedError("Необходимо переопределить метод ")
+    # def move(self, way):
+    #     ways = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
+    #     x, y = self.pos.x + ways[way][0], self.pos.y + ways[way][1]
+    #     if map.isWall(x, y):
+    #         return
+    #     elif map.isExit(x, y) and isinstance(self, Hero):
+    #         map.update_map()
+    #     elif map.isFree(x, y):
+    #         map[self.pos.x][self.pos.y] = 1
+    #         self.pos.change(x, y)
+    #         map[self.pos.x][self.pos.y] = self
+    #         map.render_map()
+    #     else:
+    #         log(f"{self.name} ({self}) cannot go this way (x:{x}, y:{y}).")
+
+    def get_distance_to(self, obj):
+        if obj not in map.objects:
+            log(f"{obj} isn't on the current map (level: {map.get_current_level()}).")
+        else:
+            return ((self.pos.x - obj.pos.x) ** 2 + (self.pos.y - obj.pos.y) ** 2) ** (1 / 2)
+    # <<< Передвижение
+
+
+class Hero(Unit):  # Класс отвечающий за параметры главного героя
+    def __init__(self, map):
+        super().__init__(map, "Hero", hp=200.0, ar=0.0, dmg=5.0, color=RED)
+        map.spawnObject(self)
+        self.score = 0
+
+    # Передвижение >>>
     def move(self, way):
         ways = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
         x, y = self.pos.x + ways[way][0], self.pos.y + ways[way][1]
-        if map.isWall(x, y):
-            return
-        elif map.isExit(x, y) and isinstance(self, Hero):
+        if map.isExit(x, y):
             map.update_map()
         elif map.isFree(x, y):
             map[self.pos.x][self.pos.y] = 1
@@ -143,28 +183,27 @@ class Unit:  # Общий класс для юнитов
         self.pos.change(x, y)
         map[self.pos.x][self.pos.y] = self
         map.render_map()
-
-    def get_distance(self, object):
-        if object not in map.objects:
-            log(f"{object} isn't on the current map (level: {map.get_current_level()}.")
-        else:
-            return ((self.pos.x - object.pos.x) ** 2 + (self.pos.y - object.pos.y) ** 2) ** (1 / 2)
     # <<< Передвижение
 
+    # Атака >>>
+    def find_nearest_enemy(self):
+        positions = [(0, 1), (1, 0), (1, 1), (0, -1), (-1, 0), (-1, -1), (-1, 1), (1, -1)]
+        for pos in positions:
+            enemy = map[self.pos.x + pos[0]][self.pos.y + pos[1]]
+            if isinstance(enemy, Enemy): return enemy
+        return None
 
-class Hero(Unit):  # Класс отвечающий за параметры главного героя
-    def __init__(self, map):
-        super().__init__(map, "Hero", hp=200.0, ar=0.0, dmg=5.0)
-        map.spawnObject(self)
-        self._score = 0
-
-    @property
-    def score(self):
-        return self._score
-
-    @score.setter
-    def score(self, value):
-        self._score = value
+    def attack(self, enemy):
+        if enemy is None: return
+        damage = (self.damage + random.randint(0, 3) - enemy.armor) * (0 if random.randint(0, 100) <= 10 else 1)
+        enemy.health -= damage
+        if damage: print(f"[{get_time()}] {self.name} inflict {damage} damage to {enemy.name} (HP: {enemy.health}).")
+        else: print(f"[{get_time()}] {self.name} missed (HP: {enemy.health}).")
+        if enemy.health <= 0:
+            enemy.die(self.name)
+            self.score += enemy.points
+            print(f"[{get_time()}] {self.name} scored {enemy.points} point (Total score: {self.score}).")
+    # <<< Атака
 
     def say(self, text):
         print(f"[{get_time()}] {self} said: '{text}'")
@@ -172,18 +211,37 @@ class Hero(Unit):  # Класс отвечающий за параметры г�
 
 class Enemy(Unit):
     def __init__(self, map, name, points, agr):
-        super().__init__(map, name, hp=100.0, ar=3.0, dmg=10.0)
+        super().__init__(map, name, hp=100.0, ar=3.0, dmg=10.0, color=PINK)
         randPoint = map.get_randomPoint()
         map.spawnObject(self, randPoint[0], randPoint[1])
         self.points = points
         self.agr_radius = agr
+
+    def move(self, way):
+        ways = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
+        x, y = self.pos.x + ways[way][0], self.pos.y + ways[way][1]
+        if map.isFree(x, y):
+            map[self.pos.x][self.pos.y] = 1
+            self.pos.change(x, y)
+            map[self.pos.x][self.pos.y] = self
+            map.render_map()
+        else:
+            log(f"{self.name} ({self}) cannot go this way (x:{x}, y:{y}).")
+
+    def attack(self, player):
+        damage = (self._damage + random.randint(0, 3) - player.armor) * (0 if random.randint(0, 100) <= 10 else 1)
+        player.health -= damage
+        if damage: print(f"[{get_time()}] {self.name} inflict {damage} damage to {player.name} (HP: {player.health}).")
+        else: print(f"[{get_time()}] {self.name} missed (HP: {hero.health}).")
+        if hero.health <= 0:
+            hero.die(self.name)
 
     @staticmethod
     def get_OrkName():
         start = ["Slog", "Ra", "Ro", "Og", "Kegi", "Zor", "Un", "Yag", "Black", "Mug", "Gud"]
         middle = "abcdeghklmnopqrst"
         end = ["ka", "rana", "all", "mash", "tan", "gu", "tag", "ge", "rim"]
-        return start[random.randint(0, len(start))-1] + middle[random.randint(0, len(middle)-1)]*random.randint(0,1) + end[random.randint(0, len(end)-1)]
+        return start[random.randint(0, len(start))-1] + middle[random.randint(0, len(middle)-1)]*random.randint(0, 1) + end[random.randint(0, len(end)-1)]
 
 
 class Map(list):
@@ -272,18 +330,16 @@ class Map(list):
     def render_map(self):   # Отрисовка карты
         for j in range(self.size):
             for i in range(self.size):
-                if self[i][j] == 0:
-                    pygame.draw.rect(sc, GREEN, (i * PIXEL_SIZE, (j + MARGIN) * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
-                elif self[i][j] == 1:
+                if self[i][j] == 1:
                     pygame.draw.rect(sc, WHITE, (i * PIXEL_SIZE, (j + MARGIN) * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
-                elif isinstance(self[i][j], Hero):
-                    pygame.draw.rect(sc, RED, (i * PIXEL_SIZE, (j + MARGIN) * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
+                elif isinstance(self[i][j], Unit):
+                    pygame.draw.rect(sc, self[i][j].color, (i * PIXEL_SIZE, (j + MARGIN) * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
                 elif self[i][j] == "exit":
                     pygame.draw.rect(sc, BLACK, (i * PIXEL_SIZE, (j + MARGIN) * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
                 elif self[i][j] == "spawn":
                     pygame.draw.rect(sc, YELLOW, (i * PIXEL_SIZE, (j + MARGIN) * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
-                elif isinstance(self[i][j], Enemy):
-                    pygame.draw.rect(sc, PINK, (i * PIXEL_SIZE, (j + MARGIN) * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
+                else:
+                    pygame.draw.rect(sc, GREEN, (i * PIXEL_SIZE, (j + MARGIN) * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
 
     def update_map(self):    # Обновить карту (заново отрегенить, расставить мобов итд)
         print(f"[{get_time()}] Level {Map.created_maps} has been passed.")
@@ -356,7 +412,7 @@ if __name__ == "__main__":
         if key[pygame.K_DOWN] or key[pygame.K_s]:  # Клавиша передвижение вниз
             hero.move("down")
         if key[pygame.K_SPACE]:
-            hero.attack()
+            hero.attack(hero.find_nearest_enemy())
         if len(map.objects) > 1:    # Передвижение мобов
             map.objects[random.randint(1, len(map.objects)-1)].move(["left", "right", "up", "down"][random.randint(0, 3)])
         # <<< Управление
@@ -367,8 +423,8 @@ if __name__ == "__main__":
             time_in_sec = int(time.strftime("%S"))
             for unit in map.objects:
                 if not isinstance(unit, Enemy): continue
-                cur_dist = unit.get_distance(hero)
-                if unit.agr_radius < cur_dist: continue
+                cur_dist = unit.get_distance_to(hero)
+                if cur_dist is None or unit.agr_radius < cur_dist: continue
                 ways = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
                 # hero = map.objects[0] // это для переноса этого ужаса в нормальный класс
                 for way in ways.items():
