@@ -12,11 +12,9 @@ LOGGING = True              # Логи разработчика
 ENEMIES_RANGE = (25, 100)   # Количество мобов на карте (от, до)
 FPS = 15                    # Количество кадров в секунду
 WAYS = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
-VERSION = "0.5.2.4"
-# Статусбары отрисовуются правильно (спс Богдану за фикс)
-# Начало работы над разделением "блоков" игры на кусочки
-# Обновление у Enemy: wonder (рандомно двигается) и haunt (движется в сторону персонажа, пока не бьёт)
-# Установлено ограничение по фпс (15)
+VERSION = "0.5.2.5"
+# Запуск перенесён в GameEngine
+# Небольшие изменения и исправления
 
 # Цвета
 BLACK = (0, 0, 0)
@@ -24,7 +22,7 @@ WHITE = (255, 255, 255)
 RED = (255, 0, 0)
 GREEN = (34, 177, 76)
 YELLOW = (255, 255, 0)
-BLUE = (29, 32, 76)
+BLUE = (51, 102, 204)
 PINK = (230, 50, 230)
 
 # Размеры
@@ -62,7 +60,7 @@ class Position(ABC):  # Координаты объектов
 class Unit(ABC):  # Общий класс для юнитов
     def __init__(self, map, name, hp, ar, dmg, color):
         self.pos = Position()
-        self.__map = map
+        self._map = map
         self._name = name
         self._health = hp
         self._armor = ar
@@ -71,6 +69,14 @@ class Unit(ABC):  # Общий класс для юнитов
         self.color = color
 
     # Характеристики >>>
+    @property
+    def map(self):
+        return self._map
+
+    @map.setter
+    def map(self, map):
+        self._map = map
+
     @property
     def health(self):
         return self._health
@@ -104,9 +110,9 @@ class Unit(ABC):  # Общий класс для юнитов
 
     def die(self, reason):
         print(f"[{get_time()}] {self.name} died - reason: {reason}.")
-        pygame.draw.rect(game.surf, WHITE, (self.pos.x * PIXEL_SIZE, self.pos.y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
-        map[self.pos.x][self.pos.y] = 1
-        map.objects.remove(self)
+        pygame.draw.rect(engine.game.surf, WHITE, (self.pos.x * PIXEL_SIZE, self.pos.y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
+        self.map[self.pos.x][self.pos.y] = 1
+        self.map.objects.remove(self)
         del self
         Events.isSomeoneDied = True
 
@@ -125,8 +131,8 @@ class Unit(ABC):  # Общий класс для юнитов
         raise NotImplementedError("Необходимо переопределить метод move")
 
     def get_distance_to(self, obj):
-        if obj not in map.objects:
-            log(f"{obj} isn't on the current map (level: {map.get_current_level()}).")
+        if obj not in self.map.objects:
+            log(f"{obj} isn't on the current map (level: {Map.get_current_level()}).")
         else:
             return ((self.pos.x - obj.pos.x) ** 2 + (self.pos.y - obj.pos.y) ** 2) ** (1 / 2)
     # <<< Передвижение
@@ -134,36 +140,36 @@ class Unit(ABC):  # Общий класс для юнитов
 
 class Hero(Unit):  # Класс отвечающий за параметры главного героя
     def __init__(self, map):
-        super().__init__(map, "Hero", hp=200.0, ar=0.0, dmg=5.0, color=RED)
+        super().__init__(map, "Hero", hp=200.0, ar=3.0, dmg=5.0, color=RED)
         map.spawnObject(self)
         self.score = 0
 
     # Передвижение >>>
     def move(self, way):
         x, y = self.pos.x + WAYS[way][0], self.pos.y + WAYS[way][1]
-        if map.isExit(x, y):
-            map.update_map()
+        if self.map.isExit(x, y):
+            self.map.update_map()
             Events.isPassedLevel = True
-        elif map.isFree(x, y):
-            pygame.draw.rect(game.surf, WHITE, (self.pos.x * PIXEL_SIZE, self.pos.y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
-            map[self.pos.x][self.pos.y] = 1
+        elif self.map.isFree(x, y):
+            pygame.draw.rect(engine.game.surf, WHITE, (self.pos.x * PIXEL_SIZE, self.pos.y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
+            self.map[self.pos.x][self.pos.y] = 1
             self.pos.change(x, y)
-            map[self.pos.x][self.pos.y] = self
-            map.render_object(self)
+            self.map[self.pos.x][self.pos.y] = self
+            self.map.render_object(self)
             Events.isHeroMoved = True
         # else: log(f"{self.name} ({self}) cannot go this way (x:{x}, y:{y}).")
 
     def teleport(self, x, y):
-        map[self.pos.x][self.pos.y] = 1
+        self.map[self.pos.x][self.pos.y] = 1
         self.pos.change(x, y)
-        map[self.pos.x][self.pos.y] = self
+        self.map[self.pos.x][self.pos.y] = self
     # <<< Передвижение
 
     # Атака >>>
     def find_nearest_enemy(self):
         positions = [(0, 1), (1, 0), (1, 1), (0, -1), (-1, 0), (-1, -1), (-1, 1), (1, -1)]
         for pos in positions:
-            enemy = map[self.pos.x + pos[0]][self.pos.y + pos[1]]
+            enemy = self.map[self.pos.x + pos[0]][self.pos.y + pos[1]]
             if isinstance(enemy, Enemy): return enemy
         return None
 
@@ -192,12 +198,12 @@ class Enemy(Unit):
     # Передвижение >>>
     def move(self, way):
         x, y = self.pos.x + WAYS[way][0], self.pos.y + WAYS[way][1]
-        if map.isFree(x, y):
-            pygame.draw.rect(game.surf, WHITE, (self.pos.x * PIXEL_SIZE, self.pos.y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
-            map[self.pos.x][self.pos.y] = 1
+        if self.map.isFree(x, y):
+            pygame.draw.rect(engine.game.surf, WHITE, (self.pos.x * PIXEL_SIZE, self.pos.y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
+            self.map[self.pos.x][self.pos.y] = 1
             self.pos.change(x, y)
-            map[self.pos.x][self.pos.y] = self
-            map.render_object(self)
+            self.map[self.pos.x][self.pos.y] = self
+            self.map.render_object(self)
             Events.isSomeoneMoved = True
         # else: log(f"{self.name} ({self}) cannot go this way (x:{x}, y:{y}).")
 
@@ -209,7 +215,7 @@ class Enemy(Unit):
         if cur_dist is None or self.agr_radius < cur_dist: return
         for way in WAYS.items():
             possibly_pos = (self.pos.x + way[1][0], self.pos.y + way[1][1])
-            if not map.isFree(possibly_pos[0], possibly_pos[1]): continue
+            if not self.map.isFree(possibly_pos[0], possibly_pos[1]): continue
             possibly_dist = ((player.pos.x - possibly_pos[0])**2 + (player.pos.y - possibly_pos[1])**2) ** (1/2)
             if possibly_dist < cur_dist: self.move(way[0])
     # <<< Передвижение
@@ -220,8 +226,8 @@ class Enemy(Unit):
         if damage:
             print(f"[{get_time()}] {self.name} inflict {damage} damage to {player.name} (HP: {player.health}).")
             Events.isHealthModified = True
-        else: print(f"[{get_time()}] {self.name} missed (HP: {hero.health}).")
-        if hero.health <= 0: hero.die(self.name)
+        else: print(f"[{get_time()}] {self.name} missed (HP: {player.health}).")
+        if player.health <= 0: player.die(self.name)
 
     @staticmethod
     def get_OrkName():
@@ -232,12 +238,11 @@ class Enemy(Unit):
 
 
 class Map(list):
-    size_list = {"S": 51}
     created_maps = 1
 
-    def __init__(self, size):
+    def __init__(self):
         super().__init__()
-        self.size = Map.size_list[size]
+        self.size = 51
         self.objects = []
         self.create_map('map.png')
         self.spawn = None
@@ -317,13 +322,13 @@ class Map(list):
         for j in range(self.size):
             for i in range(self.size):
                 if self[i][j] == 1:
-                    pygame.draw.rect(game.surf, WHITE, (i * PIXEL_SIZE, j * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
+                    pygame.draw.rect(engine.game.surf, WHITE, (i * PIXEL_SIZE, j * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
                 elif self[i][j] == "exit":
-                    pygame.draw.rect(game.surf, BLACK, (i * PIXEL_SIZE, j * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
+                    pygame.draw.rect(engine.game.surf, BLACK, (i * PIXEL_SIZE, j * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
                 elif self[i][j] == "spawn":
-                    pygame.draw.rect(game.surf, YELLOW, (i * PIXEL_SIZE, j * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
+                    pygame.draw.rect(engine.game.surf, YELLOW, (i * PIXEL_SIZE, j * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
                 else:
-                    pygame.draw.rect(game.surf, GREEN, (i * PIXEL_SIZE, j * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
+                    pygame.draw.rect(engine.game.surf, GREEN, (i * PIXEL_SIZE, j * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
 
     def render_objects(self):
         for obj in self.objects:
@@ -333,40 +338,38 @@ class Map(list):
         if obj not in self.objects:
             log(f"{obj} has not been spawned (not in map.objects)")
             return
-        pygame.draw.rect(game.surf, obj.color, (obj.pos.x * PIXEL_SIZE, obj.pos.y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
+        pygame.draw.rect(engine.game.surf, obj.color, (obj.pos.x * PIXEL_SIZE, obj.pos.y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
 
     def update_map(self):    # Обновить карту (заново отрегенить, расставить мобов итд)
         print(f"[{get_time()}] Level {Map.created_maps} has been passed.")
         for i in range(len(self.objects)-1):
             self.objects[-1].die("level passed")
-            # self.objects.pop()
         os.remove("maze.png")
         self.gen_map()
-        for i in range(len(self)):
-            self.pop()
+        for i in range(len(self)): self.pop()
         self.create_map("maze.png")
         self.objects[0].teleport(self.spawn[0], self.spawn[1])
         self.render_map()
-        [Enemy(map, f"Ork {Enemy.get_OrkName()}", random.randint(2, 5), 5.0) for i in range(random.randint(ENEMIES_RANGE[0], ENEMIES_RANGE[1]))]
+        [Enemy(self, f"Ork {Enemy.get_OrkName()}", random.randint(2, 5), 5.0) for i in range(random.randint(ENEMIES_RANGE[0], ENEMIES_RANGE[1]))]
         self.render_objects()
         Map.created_maps += 1
         log(f"Level {Map.created_maps} has been started.")
         self.objects[0].score += 10
     # <<< Настройки карты
 
-    def spawnObject(self, object, x=0, y=0):    # Спавн объекта на определённых координатах
-        if isinstance(object, Hero):  # Герой всегда на спавн-точке
+    def spawnObject(self, obj, x=0, y=0):    # Спавн объекта на определённых координатах
+        if isinstance(obj, Hero):  # Герой всегда на спавн-точке
             spawnCords = self.find_pos("spawn")
             if spawnCords is None:
                 randPoint = self.get_randomPoint()
                 x, y = randPoint[0], randPoint[1]
             else: x, y = spawnCords[0], spawnCords[1]
         elif self[x][y] != 1:
-            return log(f"{object} couldn't spawn on the wall (x:{x}, y:{y}).")
-        self.objects.append(object)
-        object.map = self
-        self[x][y] = object
-        object.pos.change(x, y)
+            return log(f"{obj} couldn't spawn on the wall (x:{x}, y:{y}).")
+        self.objects.append(obj)
+        obj.map = self
+        self[x][y] = obj
+        obj.pos.change(x, y)
 
 
 class Events:
@@ -378,6 +381,18 @@ class Events:
     isHeroMoved = False
     isSomeoneDied = False
     isHeroDied = False
+
+    @staticmethod
+    def get_game_events():
+        return Events.isSomeoneDied, Events.isSomeoneMoved, Events.isHeroMoved, Events.isHeroDied
+
+    @staticmethod
+    def get_playerbar_events():
+        return Events.isHealthModified, Events.isArmorModified
+
+    @staticmethod
+    def get_gamebar_events():
+        return Events.isScoredPoints, Events.isPassedLevel
 
 
 class Surface(ABC):     # Класс блоков
@@ -405,10 +420,11 @@ class Game(Surface, ISurface):
         super().__init__(screen, GAME["SIZE"], GAME["POSITION"])
 
     def update(self):
-        if True in (Events.isSomeoneMoved, Events.isHeroMoved, Events.isSomeoneDied):
+        if True in Events.get_game_events():
             if Events.isSomeoneMoved: Events.isSomeoneMoved = False
             if Events.isHeroMoved: Events.isHeroMoved = False
             if Events.isSomeoneDied: Events.isSomeoneDied = False
+            if Events.isHeroDied: Events.isHeroDied = False
             self.blit()
 
     def blit(self):
@@ -419,6 +435,7 @@ class StatusBar(Surface, ABC):
     def __init__(self, screen, size, position, margin=None):
         super().__init__(screen, size, position)
         self.margin = (PIXEL_SIZE*3, PIXEL_SIZE) if margin is None else margin
+        self.font = pygame.font.Font("font.ttf", 40)
 
 
 class GameBar(StatusBar, ISurface):
@@ -436,15 +453,15 @@ class GameBar(StatusBar, ISurface):
         self.blit()
 
     def update(self):
-        if True in (Events.isPassedLevel, Events. isScoredPoints):
+        if True in Events.get_gamebar_events():
             if Events.isScoredPoints: Events.isScoredPoints = False
             if Events.isPassedLevel: Events.isPassedLevel = False
             self.blit()
 
     def blit(self):
         self.surf.fill(GREEN)
-        self.score = font.render(f"Score: {self.player.score}", True, WHITE)
-        self.level = font.render(f"LVL: {Map.get_current_level()}", True, WHITE)
+        self.score = self.font.render(f"Score: {self.player.score}", True, WHITE)
+        self.level = self.font.render(f"LVL: {Map.get_current_level()}", True, WHITE)
         self.surf.blit(self.score, self.__scorePosition)
         self.surf.blit(self.level, self.__levelPosition)
         self.screen.blit(self.surf, self.position)
@@ -465,68 +482,86 @@ class PlayerBar(StatusBar, ISurface):
         self.blit()
 
     def update(self):
-        if True in (Events.isHealthModified, Events.isArmorModified):
+        if True in Events.get_playerbar_events():
             if Events.isHealthModified: Events.isHealthModified = False
             if Events.isArmorModified: Events.isArmorModified = False
             self.blit()
 
     def blit(self):
         self.surf.fill(GREEN)
-        self.heroHP = font.render(f"HP: {int(self.player.health)}/{int(self.player.MAXHEALTH)}", True, WHITE)
-        self.heroAR = font.render(f"AR: {self.player.armor}", True, WHITE)
+        self.heroHP = self.font.render(f"HP: {int(self.player.health)}/{int(self.player.MAXHEALTH)}", True, WHITE)
+        self.heroAR = self.font.render(f"AR: {self.player.armor}", True, WHITE)
         self.surf.blit(self.heroHP, self.__HPPosition)
         self.surf.blit(self.heroAR, self.__ARPosition)
         self.screen.blit(self.surf, self.position)
 
 
+class GameEngine:
+    def __init__(self):
+        self.screen = pygame.display.set_mode(DISPLAY_SIZE)
+        self.game = None
+        self.game_bar = None
+        self.player_bar = None
+        self.font = None
+        self.timer = 0
+        self._map = None
+        self._hero = None
+
+    def start(self):
+        pygame.init()
+        pygame.display.set_caption(f"CaveX v{VERSION}")
+
+        # Игровые объекты
+        self._map = Map()
+        self._hero = Hero(self._map)
+        [Enemy(self._map, f"Ork {Enemy.get_OrkName()}", random.randint(2, 5), 5.0) for i in range(random.randint(ENEMIES_RANGE[0], ENEMIES_RANGE[1]))]
+        self.timer = int(time.time())
+
+        # Инициализация блоков
+        self.game_bar = GameBar(self.screen, self._hero)
+        self.game = Game(self.screen)
+        self.player_bar = PlayerBar(self.screen, self._hero)
+
+        self._map.render_map()  # Рисуем карту
+        self._map.render_objects()  # Рисуем каждый объект
+
+        self.mainloop()
+
+    def mainloop(self):
+        clock = pygame.time.Clock()
+        run = True
+        while run:
+            clock.tick(FPS)     # Количество кадров в секунду
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    run = False
+            # Управление >>>
+            key = pygame.key.get_pressed()  # Выполнение передвижение пока зажата клавиша
+            if key[pygame.K_LEFT] or key[pygame.K_a]:  # Клавиша передвижение влево
+                self._hero.move("left")
+            if key[pygame.K_RIGHT] or key[pygame.K_d]:  # Клавиша передвижение вправо
+                self._hero.move("right")
+            if key[pygame.K_UP] or key[pygame.K_w]:  # Клавиша передвижение вверх
+                self._hero.move("up")
+            if key[pygame.K_DOWN] or key[pygame.K_s]:  # Клавиша передвижение вниз
+                self._hero.move("down")
+            if key[pygame.K_SPACE]:
+                self._hero.attack(self._hero.find_nearest_enemy())
+            if len(self._map.objects) > 1:    # Передвижение мобов
+                enemy = self._map.objects[random.randint(1, len(self._map.objects)-1)]
+                if isinstance(enemy, Enemy): enemy.wander()
+            if self.timer != int(time.time()):     # Охота мобов на перса
+                self.timer = int(time.time())
+                for unit in self._map.objects[1:]:
+                    if isinstance(unit, Enemy): unit.haunt(self._hero)
+            # <<< Управление
+
+            self.game.update()
+            self.game_bar.update()
+            self.player_bar.update()
+            pygame.display.flip()  # Обновление дисплея окна игры
+
+
 if __name__ == "__main__":
-    map = Map("S")
-    hero = Hero(map)
-    [Enemy(map, f"Ork {Enemy.get_OrkName()}", random.randint(2, 5), 5.0) for i in range(random.randint(ENEMIES_RANGE[0], ENEMIES_RANGE[1]))]
-    time_in_sec = int(time.time())
-
-    # Инициализация игры
-    pygame.init()
-    sc = pygame.display.set_mode(DISPLAY_SIZE)
-    pygame.display.set_caption(f"CaveX v{VERSION}")
-    font = pygame.font.Font("font.ttf", 40)
-    clock = pygame.time.Clock()
-
-    game_bar = GameBar(sc, hero)
-    game = Game(sc)
-    player_bar = PlayerBar(sc, hero)
-
-    map.render_map()  # Рисуем карту
-    map.render_objects()  # Рисуем каждый объект
-
-    isGame = True
-    while isGame:
-        clock.tick(FPS)     # Количество кадров в секунду
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                isGame = False
-        # Управление >>>
-        key = pygame.key.get_pressed()  # Выполнение передвижение пока зажата клавиша
-        if key[pygame.K_LEFT] or key[pygame.K_a]:  # Клавиша передвижение влево
-            hero.move("left")
-        if key[pygame.K_RIGHT] or key[pygame.K_d]:  # Клавиша передвижение вправо
-            hero.move("right")
-        if key[pygame.K_UP] or key[pygame.K_w]:  # Клавиша передвижение вверх
-            hero.move("up")
-        if key[pygame.K_DOWN] or key[pygame.K_s]:  # Клавиша передвижение вниз
-            hero.move("down")
-        if key[pygame.K_SPACE]:
-            hero.attack(hero.find_nearest_enemy())
-        if len(map.objects) > 1:    # Передвижение мобов
-            enemy = map.objects[random.randint(1, len(map.objects)-1)]
-            if isinstance(enemy, Enemy): enemy.wander()
-        if time_in_sec != int(time.time()):     # Охота мобов на перса
-            time_in_sec = int(time.time())
-            for unit in map.objects[1:]:
-                if isinstance(unit, Enemy): unit.haunt(hero)
-        # <<< Управление
-
-        game.update()
-        game_bar.update()
-        player_bar.update()
-        pygame.display.flip()  # Обновление дисплея окна игры
+    engine = GameEngine()
+    engine.start()
