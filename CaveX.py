@@ -3,68 +3,9 @@ import time
 import os
 import pygame
 from PIL import Image
-from maze import *
-from Item import *  # Заготовки инвентаря
-
-# Настройки >>>
-# Константы
-LOGGING = True  # Логи разработчика
-ENEMIES_RANGE = (25, 100)  # Количество мобов на карте (от, до)
-FPS = 15  # Количество кадров в секунду
-WAYS = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}    # Возможные пути движения
-FACE = {"up": (0, 0), "down": (0, 8), "left": (0, 0), "right": (8, 0)}      # Лицо
-TAIL = {"up": (0, 8), "down": (0, 8), "left": (8, 0), "right": (8, 0)}
-# CHECKING = [(0, 1), (1, 0), (1, 1)]   # ??? чё это
-VERSION = "0.6.1"
-# Доработки окна проигрыша и отрисовки "лиц", небольшой рефакторинг
-# Заготовки под инвентарь (криво, косо)
-
-# Цвета
-BLACK = (0, 0, 0)
-WHITE = (255, 255, 255)
-RED = (255, 0, 0)
-GREEN = (35, 180, 75)
-YELLOW = (255, 255, 0)
-BLUE = (0, 130, 255)
-PINK = (230, 50, 230)
-SLOT_BORDER = (30, 150, 65)
-SLOT_INSIDE = (215, 250, 225)
-
-# Размеры
-MAP_SIZE = 51
-PIXEL_SIZE = 10
-STATUS_BAR = (MAP_SIZE * PIXEL_SIZE, PIXEL_SIZE ** 2)
-GAME_BAR = {"SIZE": STATUS_BAR, "POSITION": (0, 0)}
-GAME = {"SIZE": (MAP_SIZE * PIXEL_SIZE, MAP_SIZE * PIXEL_SIZE), "POSITION": (0, GAME_BAR["SIZE"][1])}
-PLAYER_BAR = {"SIZE": STATUS_BAR, "POSITION": (0, GAME["SIZE"][1] + GAME_BAR["SIZE"][1])}
-INV_SLOT = PIXEL_SIZE * 15
-INV_MARGIN = (PIXEL_SIZE * 2, PIXEL_SIZE * 4)
-INVENTORY = {"SIZE": (INV_SLOT + INV_MARGIN[0]*2, GAME["SIZE"][1] + (2 * (STATUS_BAR[1]))),
-             "POSITION": (GAME["SIZE"][0], 0), "SLOT": (INV_SLOT, INV_SLOT), "MARGIN": INV_MARGIN}
-DISPLAY_SIZE = (GAME["SIZE"][0] + INVENTORY["SIZE"][0], GAME["SIZE"][1] + (2 * (STATUS_BAR[1])))
-# print(f"STATUS_BAR: {STATUS_BAR}\nGAME_BAR: {GAME_BAR}\nGAME: {GAME}\nPLAYER_BAR: {PLAYER_BAR}\nINVENTORY: {INVENTORY}\nDISPLAY_SIZE: {DISPLAY_SIZE}")
-# <<< Настройки
-
-
-# Воспомогательные функции >>>
-def get_time(): return time.strftime('%x_%X')  # Время в консоли
-
-
-def log(text):  # Логи разработчика
-    if LOGGING: print(f"[{get_time()}] LOG: {text}")
-
-
-def get_draw_position(x, y, size):  # Позиция блока на карте
-    return x * size, y * size, size, size
-
-
-def get_mod_color(color: tuple, mod: int):  # Изменение RGB цвета (x, y, z)
-    c1, c2, c3 = (c + mod for c in color)
-    c1 = 255 if c1 > 255 else 0 if c1 < 0 else color[0] + mod
-    c2 = 255 if c2 > 255 else 0 if c2 < 0 else color[1] + mod
-    c3 = 255 if c3 > 255 else 0 if c3 < 0 else color[2] + mod
-    return c1, c2, c3
-# <<< Воспомогательные функции
+from maze import *           # Генерация лабиринта
+from Item import *           # Заготовки инвентаря
+from Settings import *       # Настройки
 
 
 class Position:  # Координаты объектов
@@ -127,7 +68,7 @@ class Unit(ABC):  # Общий класс для юнитов
 
     def die(self, reason):
         print(f"[{get_time()}] {self.name} died - reason: {reason}.")
-        pygame.draw.rect(engine.game.surf, WHITE, (self.pos.x * PIXEL_SIZE, self.pos.y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
+        # pygame.draw.rect(engine.game.surf, WHITE, get_draw_position(self.pos.x, self.pos.y, PIXEL))
         self.map[self.pos.x][self.pos.y] = 1
         self.map.objects.remove(self)
         del self
@@ -166,11 +107,11 @@ class Hero(Unit):  # Класс отвечающий за параметры г�
             Events.isPassedLevel = True
             self.map.update_map()
         elif self.map.isFree(x, y):
-            pygame.draw.rect(engine.game.surf, WHITE, (self.pos.x * PIXEL_SIZE, self.pos.y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
+            # pygame.draw.rect(engine.game.surf, WHITE, get_draw_position(self.pos.x, self.pos.y, PIXEL))
             self.map[self.pos.x][self.pos.y] = 1
             self.pos.change(x, y)
             self.map[self.pos.x][self.pos.y] = self
-            self.map.render_object(self)
+            # self.map.render_object(self)
             Events.isHeroMoved = True
         # else: log(f"{self.name} ({self}) cannot go this way (x:{x}, y:{y}).")
 
@@ -217,7 +158,7 @@ class Hero(Unit):  # Класс отвечающий за параметры г�
 
 class Enemy(Unit):
     def __init__(self, map, name, points, agr):
-        super().__init__(map, name, hp=100.0, ar=3.0, dmg=10.0, color=PINK)
+        super().__init__(map, name, hp=100.0, ar=3.0, dmg=10.0, color=BLUE)
         randPoint = map.get_randomPoint()
         map.spawnObject(self, randPoint[0], randPoint[1])
         self.points = points
@@ -228,11 +169,11 @@ class Enemy(Unit):
         x, y = self.pos.x + WAYS[way][0], self.pos.y + WAYS[way][1]
         self.face = way
         if self.map.isFree(x, y):
-            pygame.draw.rect(engine.game.surf, WHITE, (self.pos.x * PIXEL_SIZE, self.pos.y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE))
+            # pygame.draw.rect(engine.game.surf, WHITE, get_draw_position(self.pos.x, self.pos.y, PIXEL))
             self.map[self.pos.x][self.pos.y] = 1
             self.pos.change(x, y)
             self.map[self.pos.x][self.pos.y] = self
-            self.map.render_object(self)
+            # self.map.render_object(self)
             Events.isSomeoneMoved = True
         # else: log(f"{self.name} ({self}) cannot go this way (x:{x}, y:{y}).")
 
@@ -317,30 +258,54 @@ class Map(list):
     # <<< Воспомогательные функции
 
     # Отрисовка >>>
-    def render_objects(self):
-        for obj in self.objects:
-            self.render_object(obj)
+    # def render_objects(self):
+    #     for obj in self.objects:
+    #         self.render_object(obj)
+    #
+    # def render_object(self, obj):
+    #     if obj not in self.objects:
+    #         log(f"{obj} has not been spawned (not in map.objects)")
+    #         return
+    #     pygame.draw.rect(engine.game.surf, obj.color, get_draw_position(obj.pos.x, obj.pos.y, PIXEL_SIZE))
+    #     pygame.draw.rect(engine.game.surf, get_mod_color(obj.color, -50),
+    #                      ((obj.pos.x * PIXEL_SIZE) + FACE[obj.face][0], (obj.pos.y * PIXEL_SIZE) + FACE[obj.face][1],
+    #                       PIXEL_SIZE - TAIL[obj.face][0], PIXEL_SIZE - TAIL[obj.face][1]))
 
-    def render_object(self, obj):
-        if obj not in self.objects:
-            log(f"{obj} has not been spawned (not in map.objects)")
-            return
-        pygame.draw.rect(engine.game.surf, obj.color, get_draw_position(obj.pos.x, obj.pos.y, PIXEL_SIZE))
-        pygame.draw.rect(engine.game.surf, get_mod_color(obj.color, -50),
-                         ((obj.pos.x * PIXEL_SIZE) + FACE[obj.face][0], (obj.pos.y * PIXEL_SIZE) + FACE[obj.face][1],
-                          PIXEL_SIZE - TAIL[obj.face][0], PIXEL_SIZE - TAIL[obj.face][1]))
+    # def render_map(self):
+    #     for j in range(self.size):
+    #         for i in range(self.size):
+    #             if self[i][j] == 1:
+    #                 pygame.draw.rect(engine.game.surf, WHITE, get_draw_position(i, j, PIXEL_SIZE))
+    #             elif self[i][j] == "exit":
+    #                 pygame.draw.rect(engine.game.surf, BLACK, get_draw_position(i, j, PIXEL_SIZE))
+    #             elif self[i][j] == "spawn":
+    #                 pygame.draw.rect(engine.game.surf, YELLOW, get_draw_position(i, j, PIXEL_SIZE))
+    #             else:
+    #                 pygame.draw.rect(engine.game.surf, GREEN, get_draw_position(i, j, PIXEL_SIZE))
 
-    def render_map(self):
-        for j in range(self.size):
-            for i in range(self.size):
-                if self[i][j] == 1:
-                    pygame.draw.rect(engine.game.surf, WHITE, get_draw_position(i, j, PIXEL_SIZE))
-                elif self[i][j] == "exit":
-                    pygame.draw.rect(engine.game.surf, BLACK, get_draw_position(i, j, PIXEL_SIZE))
-                elif self[i][j] == "spawn":
-                    pygame.draw.rect(engine.game.surf, YELLOW, get_draw_position(i, j, PIXEL_SIZE))
-                else:
-                    pygame.draw.rect(engine.game.surf, GREEN, get_draw_position(i, j, PIXEL_SIZE))
+    def render(self):
+        player = self.objects[0]
+
+        # print("y, j ", (range(player.pos.y - radius//2, player.pos.y + radius//2 - 1), range(radius)))
+        # print("x, i ", (range(player.pos.x - radius//2, player.pos.x + radius//2 - 1), range(radius)))
+        engine.game.surf.fill(DARK_GREEN)
+        for y, j in zip(range(player.pos.y - radius//2, player.pos.y + radius//2 - 1), range(radius)):
+            for x, i in zip(range(player.pos.x - radius//2, player.pos.x + radius//2 - 1), range(radius)):
+                if x < 0 or x > 50 or y < 0 or y > 50:
+                    continue
+                if self[x][y] == 1:
+                    pygame.draw.rect(engine.game.surf, WHITE, get_draw_position(i, j, PIXEL))
+                elif self[x][y] == "exit":
+                    pygame.draw.rect(engine.game.surf, BLACK, get_draw_position(i, j, PIXEL))
+                elif self[x][y] == 0:
+                    pygame.draw.rect(engine.game.surf, GREEN, get_draw_position(i, j, PIXEL))
+                elif isinstance(self[x][y], Unit):
+                    obj = self[x][y]
+                    pygame.draw.rect(engine.game.surf, obj.color, get_draw_position(i, j, PIXEL))
+                    pygame.draw.rect(engine.game.surf, get_mod_color(obj.color, -50),
+                                     ((i * PIXEL) + FACE[obj.face][0], (j * PIXEL) + FACE[obj.face][1],
+                                      PIXEL - TAIL[obj.face][0], PIXEL - TAIL[obj.face][1]))
+
     # <<< Отрисовка
 
     # Настройки карты >>>
@@ -386,10 +351,10 @@ class Map(list):
         for i in range(len(self)): self.pop()
         self.create_map("maze.png")
         self.objects[0].teleport(self.spawn[0], self.spawn[1])
-        self.render_map()
-        [Enemy(self, f"Ork {Enemy.get_ork_name()}",
-               random.randint(2, 5), 5.0) for i in range(random.randint(ENEMIES_RANGE[0], ENEMIES_RANGE[1]))]
-        self.render_objects()
+        # self.render_map()
+        # self.render()
+        [Enemy(self, f"Ork {Enemy.get_ork_name()}", random.randint(2, 5), 5.0) for i in range(random.randint(ENEMIES_RANGE[0], ENEMIES_RANGE[1]))]
+        # self.render_objects()
         Map.created_maps += 1
         log(f"Level {Map.created_maps} has been started.")
         self.objects[0].score += 10
@@ -403,8 +368,8 @@ class Map(list):
                 x, y = randPoint[0], randPoint[1]
             else:
                 x, y = spawnCords[0], spawnCords[1]
-        elif self[x][y] != 1:
-            return log(f"{obj} couldn't spawn on the wall (x:{x}, y:{y}).")
+        # elif self.isFree(x, y):
+        #     return log(f"{obj} couldn't spawn on the wall (x:{x}, y:{y}).")
         self.objects.append(obj)
         obj.map = self
         self[x][y] = obj
@@ -460,17 +425,19 @@ class ISurface(ABC):
 
 
 class Game(Surface, ISurface):
-    def __init__(self, screen):
+    def __init__(self, screen, map):
         super().__init__(screen, GAME["SIZE"], GAME["POSITION"])
         self.font = pygame.font.Font("font.ttf", PIXEL_SIZE * 4)
         self.message = None
         self.message_rect = None
+        self.map = map
 
     def update(self):
         if True in Events.get_game_events():
             if Events.isSomeoneMoved: Events.isSomeoneMoved = False
             if Events.isHeroMoved: Events.isHeroMoved = False
             if Events.isSomeoneDied: Events.isSomeoneDied = False
+            self.map.render()
             self.blit()
 
     def blit(self):
@@ -540,9 +507,9 @@ class InventoryPanel(StatusBar, ISurface):
 
     def update(self):
         self.blit()
-        if Events.isInventoryModified:
-            Events.isInventoryModified = False
-            self.blit()
+        # if Events.isInventoryModified:
+        #     Events.isInventoryModified = False
+        #     self.blit()
 
     def blit(self):
         self.surf.fill(self.bg_color)
@@ -622,10 +589,13 @@ class GameEngine:
         self.game_bar = None
         self.player_bar = None
         self.inventory_panel = None
-        # self.font = None
         self.timer = 0
         self._map = None
         self._hero = None
+
+        # debug
+        if DEBUG:
+            self.debug_cords = None
 
     # Воспомогательные функции >>>
     def units_action(self):
@@ -674,6 +644,13 @@ class GameEngine:
                 pygame.display.flip()
                 color -= 5
             Events.isGameLoosed = True
+
+    def debug_text(self):
+        font = pygame.font.SysFont("Arial", PIXEL_SIZE*2)
+        text = f"x:{self._hero.pos.x}, y:{self._hero.pos.y}"
+        self.debug_cords = font.render(text, True, WHITE)
+        self.screen.blit(self.debug_cords, (DISPLAY_SIZE[0]-150, DISPLAY_SIZE[1]-25))
+
     # <<< Воспомогательные функции
 
     # Запуск игры >>>
@@ -689,12 +666,14 @@ class GameEngine:
 
         # Инициализация блоков
         self.game_bar = GameBar(self.screen, self._hero)
-        self.game = Game(self.screen)
+        self.game = Game(self.screen, self._map)
         self.player_bar = PlayerBar(self.screen, self._hero)
         self.inventory_panel = InventoryPanel(self.screen, self._hero)
 
-        self._map.render_map()      # Рисуем карту
-        self._map.render_objects()  # Рисуем каждый объект
+        # self._map.render_map()      # Рисуем карту
+        self._map.render()      # Рисуем карту
+        self.game.blit()
+        # self._map.render_objects()  # Рисуем каждый объект
         self.mainloop()             # Цикл игры
 
     def mainloop(self):
@@ -705,15 +684,18 @@ class GameEngine:
             [exit() for event in pygame.event.get() if event.type == pygame.QUIT]
 
             self.check_losed_game()
-            if Events.isGameLoosed: continue
+            if Events.isGameLoosed:
+                continue
 
             self.player_movement()
             self.units_action()
+            # self._map.render()
 
             self.inventory_panel.update()
             self.game.update()
             self.game_bar.update()
             self.player_bar.update()
+            if DEBUG: self.debug_text()
             pygame.display.flip()
     # <<< Запуск игры
 
