@@ -1,7 +1,8 @@
 import time
 
-VERSION = "0.6.2"
-# Карта больше не рисуется вся, теперь только то, что вокруг героя (радиус 10 блоков)
+VERSION = "0.6.3.1"
+# фикс морды
+# заготовка под фабричный метод
 
 # Константы
 LOGGING = True  # Логи разработчика
@@ -24,8 +25,8 @@ SLOT_INSIDE = (215, 250, 225)
 
 # Размеры и кооринаты
 MAP_SIZE = 51
-PIXEL_SIZE = 9
-STATUS_BAR = (MAP_SIZE * PIXEL_SIZE, PIXEL_SIZE ** 2)
+PIXEL_SIZE = 10
+STATUS_BAR = (MAP_SIZE * PIXEL_SIZE + PIXEL_SIZE, PIXEL_SIZE ** 2)
 GAME_BAR = {"SIZE": STATUS_BAR, "POSITION": (0, 0)}
 GAME = {"SIZE": (MAP_SIZE * PIXEL_SIZE, MAP_SIZE * PIXEL_SIZE), "POSITION": (0, GAME_BAR["SIZE"][1])}
 PLAYER_BAR = {"SIZE": STATUS_BAR, "POSITION": (0, GAME["SIZE"][1] + GAME_BAR["SIZE"][1])}
@@ -33,10 +34,10 @@ INV_SLOT = PIXEL_SIZE * 15
 INV_MARGIN = (PIXEL_SIZE * 2, PIXEL_SIZE * 4)
 INVENTORY = {"SIZE": (INV_SLOT + INV_MARGIN[0]*2, GAME["SIZE"][1] + (2 * (STATUS_BAR[1]))),
              "POSITION": (GAME["SIZE"][0], 0), "SLOT": (INV_SLOT, INV_SLOT), "MARGIN": INV_MARGIN}
-DISPLAY_SIZE = (GAME["SIZE"][0] + INVENTORY["SIZE"][0], GAME["SIZE"][1] + (2 * (STATUS_BAR[1])))
-radius = 10
-PIXEL = 510 // radius
-__FACE_NUM = PIXEL - radius
+DISPLAY_SIZE = (GAME["SIZE"][0] + INVENTORY["SIZE"][0]*0, GAME["SIZE"][1] + (2 * (STATUS_BAR[1])))
+radius = 20
+PIXEL = 520 // radius
+__FACE_NUM = PIXEL - int(radius/2**(radius//10-0.5) if radius == 10 else radius/2**(radius//10))
 FACE = {"up": (0, 0), "down": (0, __FACE_NUM), "left": (0, 0), "right": (__FACE_NUM, 0)}      # Лицо
 TAIL = {"up": (0, __FACE_NUM), "down": (0, __FACE_NUM), "left": (__FACE_NUM, 0), "right": (__FACE_NUM, 0)}
 
