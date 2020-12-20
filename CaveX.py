@@ -100,8 +100,8 @@ class Hero(Unit):  # Класс отвечающий за параметры г�
         if self.map.isExit(x, y):
             Events.isPassedLevel = True
             self.map.update_map()
-        elif self.map.isFree(x, y):
-            self.map[self.pos.x][self.pos.y] = 1
+        elif self.map.isFree(x, y) or self.map.isVisited(x, y):
+            self.map[self.pos.x][self.pos.y] = 2
             self.pos.change(x, y)
             self.map[self.pos.x][self.pos.y] = self
             Events.isHeroMoved = True
@@ -164,7 +164,7 @@ class Enemy(Unit):
     def move(self, way):
         x, y = self.pos.x + WAYS[way][0], self.pos.y + WAYS[way][1]
         self.face = way
-        if self.map.isFree(x, y):
+        if self.map.isFree(x, y) or self.map.isVisited(x, y):
             self.map[self.pos.x][self.pos.y] = 1
             self.pos.change(x, y)
             self.map[self.pos.x][self.pos.y] = self
@@ -179,7 +179,7 @@ class Enemy(Unit):
         if cur_dist is None or self.agr_radius < cur_dist: return
         for way in WAYS.items():
             possibly_pos = (self.pos.x + way[1][0], self.pos.y + way[1][1])
-            if not self.map.isFree(possibly_pos[0], possibly_pos[1]): continue
+            if not self.map.isFree(possibly_pos[0], possibly_pos[1]) or self.map.isVisited(possibly_pos[0], possibly_pos[1]): continue
             possibly_dist = ((player.pos.x - possibly_pos[0]) ** 2 + (player.pos.y - possibly_pos[1]) ** 2) ** (1 / 2)
             if possibly_dist < cur_dist: self.move(way[0])
         if self.get_distance_to(player) < 2:
@@ -229,6 +229,10 @@ class Map(list):
     def isFree(self, x, y):
         return True if self[x][y] == 1 else False
 
+    def  isVisited(self, x, y):
+        return True if self[x][y] == 2 else False
+
+
     def get_randomPoint(self):
         random.seed(time.time())
         while True:
@@ -251,24 +255,47 @@ class Map(list):
     # Отрисовка >>>
     def render(self):
         player = self.objects[0]
-
+        def check_point(unit, x, y):
+            face = unit.face
+            if (face == "up" or face == "down") and y-player.pos.y==0 and abs(x-player.pos.x)==1:
+                return True
+            elif (face == "right" or face == "left") and x-player.pos.x==0 and abs(y-player.pos.y)==1:
+                return True
+            if abs(y-player.pos.y) >= abs(x-player.pos.x):
+                if face == "up" and abs(x-player.pos.x) <= 5 and 0 >= y-player.pos.y >= -5:
+                    return True
+                elif face == "down" and abs(x-player.pos.x) <= 5 and 0 <= y-player.pos.y <= 5:
+                    return True
+            if abs(y-player.pos.y) <= abs(x-player.pos.x):
+                if face == "left" and abs(y-player.pos.y) <= 5 and -5 <= x-player.pos.x <= 0:
+                    return True
+                elif face == "right" and abs(y-player.pos.y) <= 5 and 0 <= x-player.pos.x <= 5:
+                    return True
+            else:
+                return False
         engine.game.surf.fill(DARK_GREEN)
         for y, j in zip(range(player.pos.y - radius//2, player.pos.y + radius//2), range(radius)):
             for x, i in zip(range(player.pos.x - radius//2, player.pos.x + radius//2), range(radius)):
                 if x < 0 or x > 50 or y < 0 or y > 50:
                     continue
-                if self[x][y] == 1:
-                    pygame.draw.rect(engine.game.surf, WHITE, get_draw_position(i, j, PIXEL))
-                elif self[x][y] == "exit":
-                    pygame.draw.rect(engine.game.surf, BLACK, get_draw_position(i, j, PIXEL))
-                elif self[x][y] == 0:
-                    pygame.draw.rect(engine.game.surf, GREEN, get_draw_position(i, j, PIXEL))
-                elif isinstance(self[x][y], Unit):
-                    obj = self[x][y]
-                    pygame.draw.rect(engine.game.surf, obj.color, get_draw_position(i, j, PIXEL))
-                    pygame.draw.rect(engine.game.surf, get_mod_color(obj.color, -50),
-                                     ((i * PIXEL) + FACE[obj.face][0], (j * PIXEL) + FACE[obj.face][1],
-                                      PIXEL - TAIL[obj.face][0], PIXEL - TAIL[obj.face][1]))
+                if check_point(player, x, y):
+                    if self[x][y] == 1 or self[x][y] == 2:
+                        pygame.draw.rect(engine.game.surf, WHITE, get_draw_position(i, j, PIXEL))
+                    elif self[x][y] == "exit":
+                        pygame.draw.rect(engine.game.surf, BLACK, get_draw_position(i, j, PIXEL))
+                    elif self[x][y] == 0:
+                        pygame.draw.rect(engine.game.surf, GREEN, get_draw_position(i, j, PIXEL))
+                    elif isinstance(self[x][y], Unit):
+                        obj = self[x][y]
+                        pygame.draw.rect(engine.game.surf, obj.color, get_draw_position(i, j, PIXEL))
+                        pygame.draw.rect(engine.game.surf, get_mod_color(obj.color, -50),
+                                         ((i * PIXEL) + FACE[obj.face][0], (j * PIXEL) + FACE[obj.face][1],
+                                          PIXEL - TAIL[obj.face][0], PIXEL - TAIL[obj.face][1]))
+                else:
+                    if self[x][y] == 2:
+                        pygame.draw.rect(engine.game.surf, VISITED, get_draw_position(i, j, PIXEL))
+                    else:
+                        pygame.draw.rect(engine.game.surf, DARK_GREEN_2, get_draw_position(i, j, PIXEL))
     # <<< Отрисовка
 
     # Настройки карты >>>
