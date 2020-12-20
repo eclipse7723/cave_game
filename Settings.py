@@ -1,8 +1,9 @@
 import time
 
-VERSION = "0.6.3.1"
-# фикс морды
-# заготовка под фабричный метод
+VERSION = "0.6.3.2"
+# В конце игры отображается статистика
+# Нанесённый урон по врагам можно оперделить по их цвету
+# Удалён код, связанный с инвентарем
 
 # Константы
 LOGGING = True  # Логи разработчика
@@ -24,8 +25,10 @@ SLOT_BORDER = (30, 150, 65)
 SLOT_INSIDE = (215, 250, 225)
 
 # Размеры и кооринаты
-MAP_SIZE = 51
 PIXEL_SIZE = 10
+FONT_SIZE = PIXEL_SIZE*4
+STAT_FONT_SIZE = PIXEL_SIZE*2
+MAP_SIZE = 51
 STATUS_BAR = (MAP_SIZE * PIXEL_SIZE + PIXEL_SIZE, PIXEL_SIZE ** 2)
 GAME_BAR = {"SIZE": STATUS_BAR, "POSITION": (0, 0)}
 GAME = {"SIZE": (MAP_SIZE * PIXEL_SIZE, MAP_SIZE * PIXEL_SIZE), "POSITION": (0, GAME_BAR["SIZE"][1])}

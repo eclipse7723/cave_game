@@ -4,7 +4,6 @@ import os
 import pygame
 from PIL import Image
 from maze import *           # Генерация лабиринта
-from Item import *           # Заготовки инвентаря
 from Settings import *       # Настройки
 
 
@@ -82,7 +81,7 @@ class Unit(ABC):  # Общий класс для юнитов
 
     def get_distance_to(self, obj):
         if obj not in self.map.objects:
-            log(f"{obj} isn't on the current map (level: {Map.get_current_level()}).")
+            log(f"{obj} isn't on the current map (level: {Map.created_maps}).")
         else:
             return ((self.pos.x - obj.pos.x) ** 2 + (self.pos.y - obj.pos.y) ** 2) ** (1 / 2)
     # <<< Передвижение
@@ -92,11 +91,7 @@ class Hero(Unit):  # Класс отвечающий за параметры г�
     def __init__(self, map):
         super().__init__(map, "Hero", hp=200.0, ar=3.0, dmg=5.0, color=RED)
         map.spawnObject(self)
-        self.score = 0
-        self.heal_cooldown = 0
-        self.inventory = Inventory(3, 0)
-        self.equipped_armor = None
-        self.equipped_weapon = None
+        self._heal_cooldown = 0
 
     # Передвижение >>>
     def move(self, way):
@@ -115,12 +110,13 @@ class Hero(Unit):  # Класс отвечающий за параметры г�
     def heal(self, hp):
         if self.health >= self.MAXHEALTH:
             print(f"[{get_time()}] {self.name} already has max health ({self.health}/{self.MAXHEALTH}).")
-        elif int(time.time()) < self.heal_cooldown + 5:
+        elif int(time.time()) < self._heal_cooldown + 5:
             print("Not now")
         else:
             print(f"[{get_time()}] {self.name}: +{hp} ({self.health}/{self.MAXHEALTH}).")
             self.health += hp
-            self.heal_cooldown = int(time.time())
+            Statistic.received_heal += hp
+            self._heal_cooldown = int(time.time())
             Events.isHealthModified = True
 
     def teleport(self, x, y):
@@ -141,15 +137,18 @@ class Hero(Unit):  # Класс отвечающий за параметры г�
         if enemy is None: return
         damage = (self.damage + random.randint(0, 3) - enemy.armor) * (0 if random.randint(0, 100) <= 10 else 1)
         enemy.health -= damage
+        enemy.color = get_mod_color(enemy.color, -damage)
+        Statistic.caused_damage += damage
         if damage:
             print(f"[{get_time()}] {self.name} inflict {damage} damage to {enemy.name} (HP: {enemy.health}).")
         else:
             print(f"[{get_time()}] {self.name} missed (HP: {enemy.health}).")
         if enemy.health <= 0:
             enemy.die(self.name)
-            self.score += enemy.points
+            Statistic.killed_mobs += 1
+            Statistic.score += enemy.points
             Events.isScoredPoints = True
-            print(f"[{get_time()}] {self.name} scored {enemy.points} point (Total score: {self.score}).")
+            print(f"[{get_time()}] {self.name} scored {enemy.points} point (Total score: {Statistic.score}).")
     # <<< Атака
 
 
@@ -191,6 +190,7 @@ class Enemy(Unit):
     def attack(self, player):
         damage = (self._damage + random.randint(0, 3) - player.armor) * (0 if random.randint(0, 100) <= 10 else 1)
         player.health -= damage
+        Statistic.received_damage += damage
         if damage:
             print(f"[{get_time()}] {self.name} inflict {damage} damage to {player.name} (HP: {player.health}).")
             Events.isHealthModified = True
@@ -210,7 +210,7 @@ class Enemy(Unit):
 
 
 class Map(list):
-    created_maps = 1
+    created_maps = 0
 
     def __init__(self):
         super().__init__()
@@ -220,10 +220,6 @@ class Map(list):
         self.spawn = None
 
     # Воспомогательные функции >>>
-    @staticmethod
-    def get_current_level():
-        return Map.created_maps
-
     def isWall(self, x, y):
         return True if self[x][y] == 0 else False
 
@@ -292,6 +288,7 @@ class Map(list):
                 else:
                     self[i].append(0)
         if self.spawn is None: self.spawn = (1, 1)
+        Map.created_maps += 1
 
     def gen_map(self):  # Генерация нового лабиринта
         m = Maze()
@@ -318,8 +315,9 @@ class Map(list):
         self.objects[0].teleport(self.spawn[0], self.spawn[1])
         [Enemy(self, f"Ork {Enemy.get_ork_name()}", random.randint(2, 5), 5.0) for i in range(random.randint(ENEMIES_RANGE[0], ENEMIES_RANGE[1]))]
         Map.created_maps += 1
+        Statistic.passed_levels += 1
         log(f"Level {Map.created_maps} has been started.")
-        self.objects[0].score += 10
+        Statistic.score += 10
     # <<< Настройки карты
 
     def spawnObject(self, obj, x=0, y=0):  # Спавн объекта на определённых координатах
@@ -349,7 +347,7 @@ class Events:
     isSomeoneDied = False           # Умер ли кто-то
     isHeroDied = False              # Умер ли герой
     isGameLoosed = False            # Проиграна ли игра
-    isInventoryModified = False     # Изменилось ли что-то в инвентаре
+    isStatisticShown = False        # Отображена ли статистика
 
     @staticmethod
     def get_game_events():          # Ивенты игрового блока
@@ -387,9 +385,7 @@ class ISurface(ABC):
 class Game(Surface, ISurface):
     def __init__(self, screen, map):
         super().__init__(screen, GAME["SIZE"], GAME["POSITION"])
-        self.font = pygame.font.Font("font.ttf", PIXEL_SIZE * 4)
-        self.message = None
-        self.message_rect = None
+        self.font = pygame.font.Font("font.ttf", FONT_SIZE)
         self.map = map
 
     def update(self):
@@ -404,12 +400,12 @@ class Game(Surface, ISurface):
     def blit(self):
         self.screen.blit(self.surf, self.position)
 
-    def lose(self, color):
-        self.surf.fill((color, color, color))
-        self.message = self.font.render("YOU DIED", 1, (255, color, 0))
-        self.message_rect = self.message.get_rect(center=(GAME["SIZE"][0] // 2, ((GAME["SIZE"][1] // 2) + GAME["POSITION"][1])))
-        self.blit()
-        self.screen.blit(self.message, self.message_rect)
+    # def lose(self, color):
+    #     self.surf.fill((color, color, color))
+    #     self.message = self.font.render("YOU DIED", 1, (255, color, 0))
+    #     self.message_rect = self.message.get_rect(center=(GAME["SIZE"][0] // 2, ((GAME["SIZE"][1] // 2) + GAME["POSITION"][1])))
+    #     self.blit()
+    #     self.screen.blit(self.message, self.message_rect)
 
 
 class StatusBar(Surface, ABC):
@@ -417,78 +413,12 @@ class StatusBar(Surface, ABC):
         super().__init__(screen, size, position)
         self.margin = (PIXEL_SIZE * 3, PIXEL_SIZE) if margin is None else margin
         self.bg_color = bg_color
-        self.font = pygame.font.Font("font.ttf", PIXEL_SIZE * 4)
-
-
-# Панель инвентаря (не работает пока что) >>>
-class InvSlot:
-    index = 0
-
-    def __init__(self, surf):
-        self.surf = surf
-        self.inside = None
-        self.index = InvSlot.index
-
-        self.border_color = SLOT_BORDER
-        self.color = SLOT_INSIDE
-        self.margin = INVENTORY["MARGIN"]
-        self.size = INVENTORY["SLOT"]
-        self.border = PIXEL_SIZE//2
-
-        self.position = (self.margin[0], GAME_BAR["SIZE"][1] + self.margin[1] + self.index * (self.size[1] + self.margin[1]))
-        self.border_position = tuple(pos - self.border for pos in self.position)
-
-        # self.border_position = (self.margin[0], GAME_BAR["SIZE"][1] + self.margin[1] + self.index * (self.size[1]+ self.margin[1]))
-        # self.position = tuple(pos + self.border for pos in self.border_position)
-        self.border_block_size = tuple(size + self.border for size in self.size)
-
-        InvSlot.index += 1
-
-    def draw(self):
-        pygame.draw.rect(self.surf, self.border_color, (self.border_position, self.border_block_size))
-        pygame.draw.rect(self.surf, self.color, (self.position, tuple(size - self.border for size in self.size)))
-        if self.inside:
-            pass
-
-
-class InventoryPanel(StatusBar, ISurface):
-    def __init__(self, screen, player: Hero):
-        super().__init__(screen, INVENTORY["SIZE"], INVENTORY["POSITION"])
-        self.font = pygame.font.Font("font.ttf", PIXEL_SIZE * 4)
-        self.margin = INVENTORY["MARGIN"]
-        self.player = player
-        self.label = self.font.render("INV", True, WHITE)
-        self.__labelPosition = (self.size[0] // 4, self.margin[1])
-        self.slots = dict(zip(range(player.inventory.MAX_ITEMS), [InvSlot(self.surf) for i in range(player.inventory.MAX_ITEMS)]))
-
-        self.potion = Potion(1, "heal potion")
-        self.slots[0].inside = self.potion
-
-        self.blit()
-
-    def update(self):
-        self.blit()
-        # if Events.isInventoryModified:
-        #     Events.isInventoryModified = False
-        #     self.blit()
-
-    def blit(self):
-        self.surf.fill(self.bg_color)
-
-        for slot in self.slots.values():
-            if Events.isHeroDied:
-                slot.color = self.bg_color
-                slot.border_color = self.bg_color
-            slot.draw()
-        if not Events.isHeroDied: self.surf.blit(self.label, self.__labelPosition)
-        self.screen.blit(self.surf, self.position)
-# <<< Панель инвентаря (не работает пока что)
+        self.font = pygame.font.Font("font.ttf", FONT_SIZE)
 
 
 class GameBar(StatusBar, ISurface):
-    def __init__(self, screen, player):
+    def __init__(self, screen):
         super().__init__(screen, GAME_BAR["SIZE"], GAME_BAR["POSITION"])
-        self.player = player
         self.score = None
         self.level = None
 
@@ -507,8 +437,8 @@ class GameBar(StatusBar, ISurface):
 
     def blit(self):
         self.surf.fill(self.bg_color)
-        self.score = self.font.render(f"Score: {self.player.score}", True, WHITE)
-        self.level = self.font.render(f"LVL: {Map.get_current_level()}", True, WHITE)
+        self.score = self.font.render(f"Score: {Statistic.score}", True, WHITE)
+        self.level = self.font.render(f"LVL: {Map.created_maps}", True, WHITE)
         self.surf.blit(self.score, self.__scorePosition)
         self.surf.blit(self.level, self.__levelPosition)
         self.screen.blit(self.surf, self.position)
@@ -544,6 +474,62 @@ class PlayerBar(StatusBar, ISurface):
         self.screen.blit(self.surf, self.position)
 
 
+class Statistic(Surface):
+    received_damage = 0
+    caused_damage = 0
+    received_heal = 0
+    score = 0
+    passed_levels = 0
+    killed_mobs = 0
+    played_time = time.time()
+
+    def __init__(self, screen):
+        super().__init__(screen, DISPLAY_SIZE, (0, 0))
+        self.font = pygame.font.Font("font.ttf", FONT_SIZE)
+        self.stat_font = pygame.font.Font("font.ttf", STAT_FONT_SIZE)
+        self._message = None
+        self._statistic_msg = None
+
+    def update_statistic(self):
+        Statistic.played_time = round((time.time()-Statistic.played_time)/60, 1)
+        self._statistic_msg = f"Получено урона: {Statistic.received_damage}\n" \
+                              f"Нанесено урона: {Statistic.caused_damage}\n" \
+                              f"Убито врагов: {Statistic.killed_mobs}\n" \
+                              f"Получено лечения: {Statistic.received_heal}\n" \
+                              f"Заработано очков: {Statistic.score}\n" \
+                              f"Пройдено уровней: {Statistic.passed_levels}\n" \
+                              f"Отыграно минут: {Statistic.played_time}"
+
+    def lose(self, color):
+        self.surf.fill((color, color, color))
+        self._message = self.font.render("YOU DIED", 1, (255, color, 0))
+        help_rect = self._message.get_rect(center=(GAME["SIZE"][0] // 2, ((GAME["SIZE"][1] // 2) + GAME["POSITION"][1])))
+        self.blit()
+        self.screen.blit(self._message, help_rect)
+
+    def show(self):
+        if Events.isStatisticShown is False:
+            self.surf.fill(BLACK)
+            self.blit()
+            tmp_pos = PIXEL_SIZE*6
+            title = self.font.render("Статистика", 1, WHITE)
+            self.screen.blit(title, (PIXEL_SIZE*4, tmp_pos))
+            tmp_pos += FONT_SIZE*3
+            for t in self._statistic_msg.split("\n"):
+                tmp_pos += STAT_FONT_SIZE+PIXEL_SIZE
+                msg = self.stat_font.render(t, 1, WHITE)
+                self.screen.blit(msg, (PIXEL_SIZE*2, tmp_pos))
+            notify = self.stat_font.render("Press SPACE to close the game", 1, WHITE)
+            self.screen.blit(notify, (PIXEL_SIZE*4, DISPLAY_SIZE[1]-FONT_SIZE*2))
+            pygame.display.flip()
+            Events.isStatisticShown = True
+        elif pygame.key.get_pressed()[pygame.K_SPACE]:
+            exit()
+
+    def blit(self):
+        self.screen.blit(self.surf, self.position)
+
+
 class SingletonMeta(type):
     _instance = {}
 
@@ -560,7 +546,7 @@ class GameEngine(metaclass=SingletonMeta):
         self.game = None
         self.game_bar = None
         self.player_bar = None
-        self.inventory_panel = None
+        self.statistic = None
         self.timer = 0
         self._map = None
         self._hero = None
@@ -601,18 +587,14 @@ class GameEngine(metaclass=SingletonMeta):
             color = 105
             self._map.kill_all("Hero died :(")
             clock = pygame.time.Clock()
+            self.timer = int(time.time())
             while color:
                 clock.tick(10)
-                self.game.lose(color)
-                self.game_bar.bg_color = (color, color, color)
-                self.player_bar.bg_color = (color, color, color)
-                # self.inventory_panel.bg_color = (color, color, color)
-                # self.inventory_panel.blit()
-                self.game_bar.blit()
-                self.player_bar.blit()
+                self.statistic.lose(color)
                 pygame.display.flip()
                 color -= 5
             Events.isGameLoosed = True
+            self.statistic.update_statistic()
 
     def debug_text(self):
         pygame.draw.rect(self.screen, GREEN, (DISPLAY_SIZE[0]-100, DISPLAY_SIZE[1]-20, DISPLAY_SIZE[0]-50, DISPLAY_SIZE[1]))
@@ -635,10 +617,10 @@ class GameEngine(metaclass=SingletonMeta):
         self.timer = int(time.time())
 
         # Инициализация блоков
-        self.game_bar = GameBar(self.screen, self._hero)
+        self.game_bar = GameBar(self.screen)
         self.game = Game(self.screen, self._map)
         self.player_bar = PlayerBar(self.screen, self._hero)
-        # self.inventory_panel = InventoryPanel(self.screen, self._hero)
+        self.statistic = Statistic(self.screen)
 
         self._map.render()      # Рисуем карту
         self.game.blit()
@@ -653,12 +635,12 @@ class GameEngine(metaclass=SingletonMeta):
 
             self.check_losed_game()
             if Events.isGameLoosed:
+                self.statistic.show()
                 continue
 
             self.player_movement()
             self.units_action()
 
-            # self.inventory_panel.update()
             self.game.update()
             self.game_bar.update()
             self.player_bar.update()
