@@ -20,34 +20,17 @@ class Position:  # Координаты объектов
         return self.x, self.y
 
 
-class Unit(ABC):  # Общий класс для юнитов
+class Unit(ABC):  # Главный класс живых объектов на карте
     def __init__(self, map, name, hp, ar, dmg, color):
         self.pos = Position()
         self.map = map
         self._name = name
-        self._health = hp
-        self._armor = ar
-        self._damage = dmg
+        self.health = hp
+        self.armor = ar
+        self.damage = dmg
         self._MAXHEALTH = 200.0
         self.color = color
         self.face = 'down'
-
-    # Характеристики >>>
-    @property
-    def health(self):
-        return self._health
-
-    @health.setter
-    def health(self, hp):
-        self._health = hp
-
-    @property
-    def damage(self):
-        return self._damage
-
-    @property
-    def armor(self):
-        return self._armor
 
     @property
     def name(self):
@@ -56,8 +39,6 @@ class Unit(ABC):  # Общий класс для юнитов
     @property
     def MAXHEALTH(self):
         return self._MAXHEALTH
-
-    # <<< Характеристики
 
     # Действия >>>
     @abstractmethod
@@ -100,7 +81,7 @@ class Hero(Unit):  # Класс отвечающий за параметры г�
         if self.map.isExit(x, y):
             Events.isPassedLevel = True
             self.map.update_map()
-        elif self.map.isFree(x, y) or self.map.isVisited(x, y):
+        elif self.map.isFree(x, y):
             self.map[self.pos.x][self.pos.y] = 2
             self.pos.change(x, y)
             self.map[self.pos.x][self.pos.y] = self
@@ -159,13 +140,18 @@ class Enemy(Unit):
         map.spawnObject(self, randPoint[0], randPoint[1])
         self.points = points
         self.agr_radius = agr
+        self._onVisited = False
+
+    def isOnVisited(self):
+        return self._onVisited
 
     # Передвижение >>>
     def move(self, way):
         x, y = self.pos.x + WAYS[way][0], self.pos.y + WAYS[way][1]
         self.face = way
-        if self.map.isFree(x, y) or self.map.isVisited(x, y):
-            self.map[self.pos.x][self.pos.y] = 1
+        if self.map.isFree(x, y):
+            self.map[self.pos.x][self.pos.y] = 2 if self._onVisited else 1
+            self._onVisited = True if self.map.isVisited(x, y) else False
             self.pos.change(x, y)
             self.map[self.pos.x][self.pos.y] = self
             Events.isSomeoneMoved = True
@@ -179,16 +165,15 @@ class Enemy(Unit):
         if cur_dist is None or self.agr_radius < cur_dist: return
         for way in WAYS.items():
             possibly_pos = (self.pos.x + way[1][0], self.pos.y + way[1][1])
-            if not self.map.isFree(possibly_pos[0], possibly_pos[1]) or self.map.isVisited(possibly_pos[0], possibly_pos[1]): continue
+            if not self.map.isFree(possibly_pos[0], possibly_pos[1]): continue
             possibly_dist = ((player.pos.x - possibly_pos[0]) ** 2 + (player.pos.y - possibly_pos[1]) ** 2) ** (1 / 2)
             if possibly_dist < cur_dist: self.move(way[0])
         if self.get_distance_to(player) < 2:
             self.attack(player)
-
     # <<< Передвижение
 
     def attack(self, player):
-        damage = (self._damage + random.randint(0, 3) - player.armor) * (0 if random.randint(0, 100) <= 10 else 1)
+        damage = (self.damage + random.randint(0, 3) - player.armor) * (0 if random.randint(0, 100) <= 10 else 1)
         player.health -= damage
         Statistic.received_damage += damage
         if damage:
@@ -227,11 +212,10 @@ class Map(list):
         return True if self[x][y] == "exit" else False
 
     def isFree(self, x, y):
-        return True if self[x][y] == 1 else False
+        return True if self[x][y] == 1 or self[x][y] == 2 else False
 
-    def  isVisited(self, x, y):
+    def isVisited(self, x, y):
         return True if self[x][y] == 2 else False
-
 
     def get_randomPoint(self):
         random.seed(time.time())
@@ -255,6 +239,7 @@ class Map(list):
     # Отрисовка >>>
     def render(self):
         player = self.objects[0]
+
         def check_point(unit, x, y):
             face = unit.face
             if (face == "up" or face == "down") and y-player.pos.y==0 and abs(x-player.pos.x)==1:
@@ -273,6 +258,7 @@ class Map(list):
                     return True
             else:
                 return False
+
         engine.game.surf.fill(DARK_GREEN)
         for y, j in zip(range(player.pos.y - radius//2, player.pos.y + radius//2), range(radius)):
             for x, i in zip(range(player.pos.x - radius//2, player.pos.x + radius//2), range(radius)):
@@ -292,7 +278,7 @@ class Map(list):
                                          ((i * PIXEL) + FACE[obj.face][0], (j * PIXEL) + FACE[obj.face][1],
                                           PIXEL - TAIL[obj.face][0], PIXEL - TAIL[obj.face][1]))
                 else:
-                    if self[x][y] == 2:
+                    if self[x][y] == 2 or isinstance(self[x][y], Enemy) and self[x][y].isOnVisited():
                         pygame.draw.rect(engine.game.surf, VISITED, get_draw_position(i, j, PIXEL))
                     else:
                         pygame.draw.rect(engine.game.surf, DARK_GREEN_2, get_draw_position(i, j, PIXEL))
@@ -364,7 +350,7 @@ class Map(list):
         for entity in self.objects[1:]: entity.die(reason)
 
 
-class Events:
+class Events:   # Игровые события
     isScoredPoints = False          # Получены ли баллы
     isPassedLevel = False           # Пройден ли уровень
     isHealthModified = False        # Изменилось ли HP героя
@@ -389,6 +375,7 @@ class Events:
         return Events.isScoredPoints, Events.isPassedLevel
 
 
+# Визуальная часть >>>
 class Surface(ABC):  # Класс блоков
     def __init__(self, screen, size, position):
         self.screen = screen
@@ -420,19 +407,12 @@ class Game(Surface, ISurface):
             if Events.isSomeoneMoved: Events.isSomeoneMoved = False
             if Events.isHeroMoved: Events.isHeroMoved = False
             if Events.isSomeoneDied: Events.isSomeoneDied = False
+            if DEBUG: engine.debug_text()
             self.map.render()
-            engine.debug_text()
             self.blit()
 
     def blit(self):
         self.screen.blit(self.surf, self.position)
-
-    # def lose(self, color):
-    #     self.surf.fill((color, color, color))
-    #     self.message = self.font.render("YOU DIED", 1, (255, color, 0))
-    #     self.message_rect = self.message.get_rect(center=(GAME["SIZE"][0] // 2, ((GAME["SIZE"][1] // 2) + GAME["POSITION"][1])))
-    #     self.blit()
-    #     self.screen.blit(self.message, self.message_rect)
 
 
 class StatusBar(Surface, ABC):
@@ -489,7 +469,7 @@ class PlayerBar(StatusBar, ISurface):
         if True in Events.get_playerbar_events():
             if Events.isHealthModified: Events.isHealthModified = False
             if Events.isArmorModified: Events.isArmorModified = False
-            engine.debug_text()
+            if DEBUG: engine.debug_text()
             self.blit()
 
     def blit(self):
@@ -555,6 +535,7 @@ class Statistic(Surface):
 
     def blit(self):
         self.screen.blit(self.surf, self.position)
+# <<< Визуальная часть
 
 
 class SingletonMeta(type):
@@ -567,6 +548,7 @@ class SingletonMeta(type):
         return cls._instance[cls.__name__]
 
 
+# Главный класс проекта (запуск здесь)
 class GameEngine(metaclass=SingletonMeta):
     def __init__(self):
         self.screen = pygame.display.set_mode(DISPLAY_SIZE)
@@ -578,9 +560,7 @@ class GameEngine(metaclass=SingletonMeta):
         self._map = None
         self._hero = None
 
-        # debug
-        if DEBUG:
-            self.debug_cords = None
+        if DEBUG: self.debug_cords = None
 
     # Воспомогательные функции >>>
     def units_action(self):
@@ -629,7 +609,6 @@ class GameEngine(metaclass=SingletonMeta):
         text = f"x:{self._hero.pos.x}, y:{self._hero.pos.y}"
         self.debug_cords = font.render(text, True, WHITE)
         self.screen.blit(self.debug_cords, (DISPLAY_SIZE[0]-100, DISPLAY_SIZE[1]-20))
-
     # <<< Воспомогательные функции
 
     # Запуск игры >>>
