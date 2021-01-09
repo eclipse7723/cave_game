@@ -1,7 +1,7 @@
 import time
 
-VERSION = "0.7"
-# Описание в README.md
+VERSION = "0.7.1"
+# Фикс отображения score
 
 # Константы
 LOGGING = True               # Логи разработчика

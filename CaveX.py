@@ -327,7 +327,6 @@ class Map(list):
         self.create_map("maze.png")
         self.objects[0].teleport(self.spawn[0], self.spawn[1])
         [Enemy(self, f"Ork {Enemy.get_ork_name()}", random.randint(2, 5), 5.0) for i in range(random.randint(ENEMIES_RANGE[0], ENEMIES_RANGE[1]))]
-        Map.created_maps += 1
         Statistic.passed_levels += 1
         log(f"Level {Map.created_maps} has been started.")
         Statistic.score += 10
