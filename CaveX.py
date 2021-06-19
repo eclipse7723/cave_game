@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-import time
 import os
 import pygame
 from PIL import Image
@@ -360,6 +359,7 @@ class Events:   # Игровые события
     isHeroDied = False              # Умер ли герой
     isGameLoosed = False            # Проиграна ли игра
     isStatisticShown = False        # Отображена ли статистика
+    isPause = False                 # Открыто ли меню паузы
 
     @staticmethod
     def get_game_events():          # Ивенты игрового блока
@@ -534,6 +534,45 @@ class Statistic(Surface):
 
     def blit(self):
         self.screen.blit(self.surf, self.position)
+
+class PauseMenu(Surface):
+
+    def __init__(self, screen):
+        super().__init__(screen, DISPLAY_SIZE, (0, 0))
+        self.font = pygame.font.Font("font.ttf", FONT_SIZE)
+        self.stat_font = pygame.font.Font("font.ttf", STAT_FONT_SIZE)
+        self.button = []
+
+    def show(self):
+        self.surf.fill(RED)
+        self.blit()
+        tmp_pos = PIXEL_SIZE*6
+        title = self.font.render("Pause", 1, WHITE)
+        self.screen.blit(title, (int(STATUS_BAR[0]/3), tmp_pos+50))
+        title = self.font.render("Pause", 1, BLACK)
+        self.screen.blit(title, (int(STATUS_BAR[0]/3)+2, tmp_pos+52))
+        title = self.font.render("Save", 1, WHITE)
+        self.screen.blit(title, (int(STATUS_BAR[0] / 3)+15, tmp_pos+300))
+        title = self.font.render("Settings", 1, WHITE)
+        self.screen.blit(title, (int(STATUS_BAR[0] / 3)-35, tmp_pos + 400))
+        title = self.font.render("Exit", 1, WHITE)
+        self.screen.blit(title, (int(STATUS_BAR[0] / 3) + 35, tmp_pos + 500))
+        pygame.display.flip()
+
+    def rectangle(self):
+        x, y = pygame.mouse.get_pos()
+        for i in range(3):
+            if LUC_PAUSE_BUTTON[i][0]<=x<=(SIZE_PAUSE_BUTTON[i][0]+LUC_PAUSE_BUTTON[i][0]) and LUC_PAUSE_BUTTON[i][1]<=y<=(SIZE_PAUSE_BUTTON[i][1]+LUC_PAUSE_BUTTON[i][1]):
+                pygame.draw.rect(self.screen, WHITE,(LUC_PAUSE_BUTTON[i],SIZE_PAUSE_BUTTON[i]), 4)
+                pressed = pygame.mouse.get_pressed()
+                if pressed[0]:
+                    if i == 2:
+                        exit()
+                    else:
+                        print(i)
+
+    def blit(self):
+        self.screen.blit(self.surf, self.position)
 # <<< Визуальная часть
 
 
@@ -555,6 +594,7 @@ class GameEngine(metaclass=SingletonMeta):
         self.game_bar = None
         self.player_bar = None
         self.statistic = None
+        self.pausemenu = None
         self.timer = 0
         self._map = None
         self._hero = None
@@ -573,6 +613,9 @@ class GameEngine(metaclass=SingletonMeta):
             for enemy in self._map.objects[1:]:
                 if isinstance(enemy, Enemy): enemy.haunt(self._hero)
 
+
+
+
     def player_movement(self):
         key = pygame.key.get_pressed()      # Действия, пока клавиша зажата
         if key[pygame.K_LEFT] or key[pygame.K_a]:       # Движение влево
@@ -581,12 +624,14 @@ class GameEngine(metaclass=SingletonMeta):
             self._hero.move("right")
         if key[pygame.K_UP] or key[pygame.K_w]:         # Движение вперёд
             self._hero.move("up")
-        if key[pygame.K_DOWN] or key[pygame.K_s]:       # Движение назад
+        if key[pygame.K_DOWN] or key[pygame.K_s]:       # Движение назадw
             self._hero.move("down")
         if key[pygame.K_SPACE]:                         # Атака
             self._hero.attack(self._hero.find_nearest_enemy())
         if key[pygame.K_e]:                             # Хилка
             self._hero.heal(50)
+
+
 
     def check_losed_game(self):
         if Events.isHeroDied and Events.isGameLoosed is False:
@@ -626,6 +671,7 @@ class GameEngine(metaclass=SingletonMeta):
         self.game = Game(self.screen, self._map)
         self.player_bar = PlayerBar(self.screen, self._hero)
         self.statistic = Statistic(self.screen)
+        self.pausemenu = PauseMenu(self.screen)
 
         self._map.render()      # Рисуем карту
         self.game.blit()
@@ -636,15 +682,26 @@ class GameEngine(metaclass=SingletonMeta):
         run = True
         while run:
             clock.tick(FPS)  # Количество кадров в секунду
-            [exit() for event in pygame.event.get() if event.type == pygame.QUIT]
-
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    exit()
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        Events.isPause = not Events.isPause
             self.check_losed_game()
             if Events.isGameLoosed:
                 self.statistic.show()
                 continue
+            if not Events.isPause:
+                self.player_movement()
+                self.units_action()
+                self.game.blit()
+                self.game_bar.blit()
+                self.player_bar.blit()
+            else:
+                self.pausemenu.show()
+                self.pausemenu.rectangle()
 
-            self.player_movement()
-            self.units_action()
 
             self.game.update()
             self.game_bar.update()

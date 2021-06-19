@@ -1,7 +1,9 @@
 import time
 
-VERSION = "0.7.1"
-# Фикс отображения score
+VERSION = "0.7.2"
+# Реализована пауза
+# Сделана заготовка под меню с реагированием на нажатие определенный кнопки (вывод индекса кнопки в консоль или выход)
+# Добавлена обводка части меню, на котором находиться курсор
 
 # Константы
 LOGGING = True               # Логи разработчика
@@ -23,7 +25,7 @@ BLUE = (0, 130, 255)
 PINK = (230, 50, 230)
 
 # Размеры и кооринаты
-PIXEL_SIZE = 10
+PIXEL_SIZE = 13
 FONT_SIZE = PIXEL_SIZE*4
 STAT_FONT_SIZE = PIXEL_SIZE*2
 MAP_SIZE = 51
@@ -37,6 +39,9 @@ PIXEL = 520 // radius
 __FACE_NUM = PIXEL - int(radius/2**(radius//10-0.5) if radius == 10 else radius/2**(radius//10))
 FACE = {"up": (0, 0), "down": (0, __FACE_NUM), "left": (0, 0), "right": (__FACE_NUM, 0)}      # Лицо
 TAIL = {"up": (0, __FACE_NUM), "down": (0, __FACE_NUM), "left": (__FACE_NUM, 0), "right": (__FACE_NUM, 0)}
+SIZE_PAUSE_BUTTON = [(164, 61), (269, 61), (125, 61)]
+LUC_PAUSE_BUTTON = [(236, 374), (186, 474), (256, 574)]
+
 
 
 # Воспомогательные функции >>>
@@ -49,6 +54,7 @@ def log(text):  # Логи разработчика
 
 def get_draw_position(x, y, size):  # Позиция блока на карте
     return x * size, y * size, size, size
+
 
 
 def get_mod_color(color: tuple, mod: int):  # Изменение RGB цвета (x, y, z)
