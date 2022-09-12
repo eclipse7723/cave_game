@@ -4,6 +4,7 @@ import enum
 import os
 from PIL import Image
 
+from Settings import MAZE_PATH
 import maze.utils as util
 
 
@@ -73,7 +74,7 @@ class MazeBase(object):
 
         return self._dll
 
-    def save_maze(self, file_name="maze.png", scale=1):
+    def save_maze(self, file_name=MAZE_PATH, scale=1):
         """Saves the maze as png."""
         if self.maze is None:
             raise util.MazeError(
@@ -93,7 +94,7 @@ class MazeBase(object):
 
         Image.fromarray(util.upscale(self.solution, scale), "RGB").save(file_name, "png")
 
-    def load_maze(self, file_name="maze.png"):
+    def load_maze(self, file_name=MAZE_PATH):
         """Loads the maze from png."""
         if not os.path.isfile(file_name):
             raise util.MazeError("Cannot load maze because <{}> does not exist.".format(file_name))
