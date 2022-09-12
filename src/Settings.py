@@ -1,8 +1,6 @@
 import time
 
-VERSION = "0.7.3"
-# Реализовано меню
-# Добавлены мелкие наработки
+VERSION = "0.7.4"
 
 # Константы
 LOGGING = True               # Логи разработчика
@@ -43,7 +41,7 @@ LUC_PAUSE_BUTTON = [(236, 374), (186, 474), (256, 574)]
 SAVE_MENU_BUTTON = [(571, 61*2), (571, 61*2), (571, 61*2)]
 LUC_SAVE_BUTTON = [(46, 374), (46, 524), (46, 674)]
 SIZE_MENU_BUTTON = [(144, 61), (160, 61), (269, 61), (125, 61)]
-LUC_MENU_BUTTON = [(236, 374), (256, 474),(186, 574), (256, 674) ]
+LUC_MENU_BUTTON = [(236, 374), (256, 474), (186, 574), (256, 674)]
 
 # path
 RESOURCES_PATH = "src/resources"
@@ -52,24 +50,31 @@ MAZE_PATH = RESOURCES_PATH + "/maze.png"
 FIRST_MAP_PATH = RESOURCES_PATH + "/map.png"
 
 
-
-# Воспомогательные функции >>>
-def get_time(): return time.strftime('%x_%X')  # Время в консоли
-
-
-def log(text):  # Логи разработчика
-    if LOGGING: print(f"[{get_time()}] LOG: {text}")
+def get_time():
+    return time.strftime('%x_%X')
 
 
-def get_draw_position(x, y, size):  # Позиция блока на карте
-    return x * size, y * size, size, size
+def log(text):
+    if LOGGING is False:
+        return
+    print(f"[{get_time()}] LOG: {text}")
 
 
+def get_draw_position(x, y, size):
+    """ Позиция блока на карте """
+    pos = x * size, y * size, size, size
+    return pos
 
-def get_mod_color(color: tuple, mod: int):  # Изменение RGB цвета (x, y, z)
-    c1, c2, c3 = (c + mod for c in color)
-    c1 = 255 if c1 > 255 else 0 if c1 < 0 else color[0] + mod
-    c2 = 255 if c2 > 255 else 0 if c2 < 0 else color[1] + mod
-    c3 = 255 if c3 > 255 else 0 if c3 < 0 else color[2] + mod
-    return c1, c2, c3
-# <<< Воспомогательные функции
+
+def get_mod_color(color: tuple, mod: int):
+    """ Изменение RGB цвета в промежутке от 0 до 255
+        :param color: (r, g, b) tuple of color
+        :param mod: int that would be added to color
+    """
+    r, g, b = (c + mod for c in color)
+
+    r = 255 if r > 255 else 0 if r < 0 else color[0] + mod
+    g = 255 if g > 255 else 0 if g < 0 else color[1] + mod
+    b = 255 if b > 255 else 0 if b < 0 else color[2] + mod
+
+    return r, g, b

@@ -2,8 +2,8 @@ import numpy as np
 import collections
 import random
 
-import maze.utils as utils
-import maze.base as base
+import src.maze.utils as utils
+import src.maze.base as base
 
 
 class Maze(base.MazeBase):
