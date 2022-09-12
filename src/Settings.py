@@ -44,7 +44,7 @@ SIZE_MENU_BUTTON = [(144, 61), (160, 61), (269, 61), (125, 61)]
 LUC_MENU_BUTTON = [(236, 374), (256, 474), (186, 574), (256, 674)]
 
 # path
-RESOURCES_PATH = "src/resources"
+RESOURCES_PATH = "resources"
 FONT_PATH = RESOURCES_PATH + "/font.ttf"
 MAZE_PATH = RESOURCES_PATH + "/maze.png"
 FIRST_MAP_PATH = RESOURCES_PATH + "/map.png"
