@@ -190,7 +190,3 @@ class GameEngine(metaclass=SingletonMeta):
             pygame.display.flip()
     # <<< Запуск игры
 
-
-def run():
-    engine = GameEngine()
-    engine.start()

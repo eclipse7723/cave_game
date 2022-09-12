@@ -1,5 +1,6 @@
-from src.App import run
+from src.GameEngine import GameEngine
 
 
 if __name__ == "__main__":
-    run()
+    game = GameEngine()
+    game.start()
